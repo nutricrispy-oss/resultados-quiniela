@@ -119,6 +119,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
 .inp i.lk{margin:0 0 0 6px;font-size:14px}
 .disc{max-width:640px;margin:0 auto;padding:0 16px 12px;text-align:center;color:var(--muted);font-size:12px}
 .disc p{margin:4px 0}
+.inp textarea{flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;font-weight:600;padding:12px 0;outline:0;resize:vertical}
 .empty{text-align:center;color:var(--muted);padding:24px 0;font-weight:700}
 </style>
 </head>
@@ -467,69 +468,79 @@ const DREAMS=[
   ["🧺","Lavandería"],
   ["👬","Hermanos"]
 ];
-const SORTEOS=[['tempranero','Sorteo Tempranero','🌅','10:45'],['matutino','Sorteo Matutino','☀️','12:45'],['vespertino','Sorteo Vespertino','🌤️','16:30'],['nocturno','Sorteo Nocturno','🌙','20:15']];
-const SLOTS=[[10,45],[12,45],[16,30],[20,15]];
-let RES=null,resLoaded=0,resErr=false;
+const SORTEOS=[['tempranero','Sorteo Tempranero','🌅'],['matutino','Sorteo Matutino','☀️'],['vespertino','Sorteo Vespertino','🌤️'],['nocturno','Sorteo Nocturno','🌙']];
+let RES=null,LD=null;
 const p2=n=>String(n).padStart(2,'0');
 const dm=n=>{const d=n.slice(-2);return `${d} · ${DREAMS[Number(d)][1]}`;};
-async function fetchRes(mode){
-  try{
-    const r=await fetch('resultados.json?t='+Date.now(),{cache:'no-store'});
-    if(!r.ok) throw new Error('http '+r.status);
-    const j=await r.json();
-    const changed=!RES||RES.actualizado!==j.actualizado;
-    RES=j;resErr=false;resLoaded=Date.now();
-    try{localStorage.setItem('crz_res',JSON.stringify(j));}catch(e){}
-    if(mode==='manual') toast(changed?'Resultados actualizados':'Sin novedades todavía');
-    else if(mode==='auto'&&changed&&S.tab==='res') toast('Resultados actualizados');
-  }catch(e){
-    resErr=true;
-    if(!RES){try{RES=JSON.parse(localStorage.getItem('crz_res')||'null');}catch(_){}}
-    if(mode==='manual') toast('No se pudo actualizar');
+const hoyStr=()=>{const n=new Date();return n.getFullYear()+'-'+p2(n.getMonth()+1)+'-'+p2(n.getDate());};
+function loadRes(){try{RES=JSON.parse(localStorage.getItem('crz_manual')||'null');}catch(e){RES=null;}}
+function saveRes(){try{localStorage.setItem('crz_manual',JSON.stringify(RES));}catch(e){}}
+function sugerido(lista){
+  const n=new Date(),m=n.getHours()*60+n.getMinutes();
+  const k=m<12*60?'tempranero':m<16*60?'matutino':m<20*60?'vespertino':'nocturno';
+  return lista.some(s=>s[0]===k)?k:lista[lista.length-1][0];
+}
+// Si el texto pegado trae los títulos "SORTEO ...", toma cada sorteo; si no, las primeras 14 cifras de 3 dígitos.
+function extraerSorteos(t){
+  const up=t.toUpperCase(),out={};
+  const pos=SORTEOS.map(s=>({k:s[0],i:up.indexOf('SORTEO '+s[0].toUpperCase())})).filter(x=>x.i>=0).sort((a,b)=>a.i-b.i);
+  pos.forEach((x,j)=>{
+    const fin=j+1<pos.length?pos[j+1].i:t.length;
+    const nums=t.slice(x.i,fin).match(/\b\d{3}\b/g)||[];
+    if(nums.length>=14) out[x.k]=nums.slice(0,14);
+  });
+  return out;
+}
+function guardarRes(app){
+  const t=$('#paste').value,msg=$('#rmsg');
+  let found=extraerSorteos(t);
+  if(!Object.keys(found).length){
+    const nums=t.match(/\b\d{3}\b/g)||[];
+    if(nums.length<14){msg.textContent=`Encontré ${nums.length} números de 3 cifras y hacen falta 14.`;return;}
+    found[LD]=nums.slice(0,14);
   }
-  if(S.tab==='res') renderRes();
+  const hoy=hoyStr();
+  if(!RES||RES.fecha!==hoy) RES={fecha:hoy,sorteos:{}};
+  Object.assign(RES.sorteos,found);
+  RES.actualizado=new Date().toISOString();
+  saveRes();
+  toast(Object.keys(found).length>1?'Sorteos guardados':'Sorteo guardado');
+  renderRes(app);
 }
 function renderRes(app){
   app=app||$('#app');
-  let h='';
-  if(!RES){
-    h+=`<section class="card"><h2>Resultados</h2><p class="hint">${resErr?'No se pudieron cargar los resultados. Revisá tu conexión.':'Cargando…'}</p></section>`;
-  }else{
-    const n=new Date(),hoy=n.getFullYear()+'-'+p2(n.getMonth()+1)+'-'+p2(n.getDate());
-    const [y,mo,d]=String(RES.fecha||'').split('-');
-    const act=new Date(RES.actualizado);
-    const cuando=isNaN(act)?'':act.toLocaleString('es-PY',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    if(RES.fecha!==hoy) h+=`<div class="banner">Mostrando resultados del ${d}/${mo}/${y}. Los de hoy aparecen a medida que se sortean.</div>`;
-    h+=`<p class="meta">Actualizado: ${cuando}. Tocá una bola para ver qué significan sus 2 últimas cifras.</p>`;
-    SORTEOS.forEach(([k,nm,ic,hr])=>{
-      const nums=(RES.sorteos||{})[k];
-      h+=`<section class="card"><h2>${ic} ${nm}</h2><p class="meta">Se actualiza a las ${hr}</p>`;
-      if(nums&&nums.length){
-        h+=`<div class="balls">${nums.map((x,i)=>`<button class="ball ${i===0?'top':''}" data-n="${x}"><small>${p2(i+1)}</small><b>${x}</b></button>`).join('')}</div>`;
-        h+=`<button class="btn full" data-sh="${k}">Compartir por WhatsApp</button>`;
-      }else h+=`<p class="hint">Todavía sin resultados.</p>`;
-      h+=`</section>`;
-    });
-  }
-  h+=`<button class="btn ghost full" id="refr">Actualizar ahora</button>`;
+  const dom=new Date().getDay()===0;
+  const lista=dom?SORTEOS.filter(s=>s[0]==='vespertino'||s[0]==='nocturno'):SORTEOS;
+  if(!LD||!lista.some(s=>s[0]===LD)) LD=sugerido(lista);
+  let h=`<section class="card"><h2>Cargar resultados</h2><p class="hint">Abrí la página oficial, copiá los números y pegalos acá. También podés escribir los 14 números de 3 cifras.${dom?' Los domingos solo hay sorteo Vespertino y Nocturno.':''}</p>
+  <div class="chips">${lista.map(s=>`<button class="chip ${s[0]===LD?'on':''}" data-ld="${s[0]}">${s[2]} ${s[1].replace('Sorteo ','')}</button>`).join('')}</div>
+  <label class="fld"><span>Resultados copiados</span><div class="inp"><textarea id="paste" rows="3" autocomplete="off" placeholder="Pegá o escribí los números acá"></textarea></div></label>
+  <div id="rmsg" class="meta" style="color:var(--red);font-weight:700"></div>
+  <button class="btn full" id="gres" style="background:var(--accent);color:var(--accent-ink)">Guardar resultados</button>
+  <a class="btn ghost full" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="https://www.quiniela.com.py/resultados" target="_blank" rel="noopener">Abrir página oficial</a></section>`;
+  if(RES&&RES.fecha!==hoyStr()){const [y,mo,d]=RES.fecha.split('-');h+=`<div class="banner">Mostrando resultados cargados el ${d}/${mo}/${y}.</div>`;}
+  h+=`<p class="meta">Tocá una bola para ver qué significan sus 2 últimas cifras.</p>`;
+  lista.forEach(([k,nm,ic])=>{
+    const nums=RES&&RES.sorteos&&RES.sorteos[k];
+    h+=`<section class="card"><h2>${ic} ${nm}</h2>`;
+    if(nums&&nums.length){
+      h+=`<div class="balls">${nums.map((x,i)=>`<button class="ball ${i===0?'top':''}" data-n="${x}"><small>${p2(i+1)}</small><b>${x}</b></button>`).join('')}</div>`;
+      h+=`<button class="btn full" data-sh="${k}">Compartir por WhatsApp</button><button class="btn ghost full" data-del="${k}">Borrar</button>`;
+    }else h+=`<p class="hint">Todavía sin cargar.</p>`;
+    h+=`</section>`;
+  });
   app.innerHTML=h;
+  $$('[data-ld]',app).forEach(b=>b.onclick=()=>{const v=$('#paste').value;LD=b.dataset.ld;renderRes(app);$('#paste').value=v;});
+  $('#gres',app).onclick=()=>guardarRes(app);
   $$('[data-n]',app).forEach(b=>b.onclick=()=>toast(dm(b.dataset.n)));
   $$('[data-sh]',app).forEach(b=>b.onclick=()=>wa(resText(b.dataset.sh)));
-  const rb=$('#refr',app);if(rb) rb.onclick=()=>fetchRes('manual');
+  $$('[data-del]',app).forEach(b=>b.onclick=()=>{delete RES.sorteos[b.dataset.del];saveRes();renderRes(app);});
 }
 function resText(k){
   const s=SORTEOS.find(x=>x[0]===k),nums=RES.sorteos[k];
   const [y,mo,d]=RES.fecha.split('-');
   return `🎰 *Resultados · Cálculos de premios by CRz*\n${s[2]} ${s[1]} · ${d}/${mo}/${y}\n━━━━━━━━━━\n`+nums.map((x,i)=>`${p2(i+1)}: ${i===0?`*${x}*`:x}`).join('\n');
 }
-function slotTick(){
-  if(document.hidden) return;
-  const n=new Date(),m=n.getHours()*60+n.getMinutes();
-  const win=SLOTS.some(([h,mi])=>{const d=m-(h*60+mi);return d>=0&&d<=20;});
-  if(win&&Date.now()-resLoaded>=110000) fetchRes('auto');
-}
-setInterval(slotTick,30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-resLoaded>300000) fetchRes('auto');});
 
 /* ---------- Sueños 00-99 ---------- */
 let QUERY='';
@@ -583,7 +594,7 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 render();
-fetchRes();
+loadRes();
 </script>
 </body>
 </html>
