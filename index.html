@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cálculos de premios by CRz</title>
+<meta name="theme-color" content="#0038A8">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Premios CRz">
+<script>
+(function(){
+  try{
+    var t=localStorage.getItem('crz_theme');
+    if(!t){t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}
+    document.documentElement.setAttribute('data-theme',t);
+  }catch(e){}
+})();
+</script>
+<style>
+:root{
+  --bg:#EEF2F9; --surface:#FFFFFF; --ink:#12203A; --muted:#5B6B88; --line:#D8E0EE;
+  --accent:#0038A8; --accent-ink:#FFFFFF; --field:#F4F7FC;
+  --hero:#0F1E3F; --hero-muted:#AFBDDA; --gold:#FFC83D;
+  --prize:#0B6B3A; --prize-bg:#E3F5EA; --wa:#1FAF5A; --red:#D52B1E;
+  --shadow:0 1px 2px rgba(15,30,63,.08),0 6px 18px rgba(15,30,63,.06);
+}
+[data-theme="dark"]{
+  --bg:#0C1220; --surface:#151D31; --ink:#EAF0FC; --muted:#93A2C2; --line:#25304A;
+  --accent:#6C97FF; --accent-ink:#0C1220; --field:#0F1729;
+  --hero:#1B2A55; --hero-muted:#B7C4E3; --gold:#FFC83D;
+  --prize:#FFC83D; --prize-bg:#2A2A1C; --wa:#25C866;
+  --shadow:none;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums}
+body{padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));min-height:100vh}
+.stripe{height:5px;background:linear-gradient(90deg,var(--red) 0 33.3%,#fff 33.3% 66.6%,#0038A8 66.6% 100%)}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 6px;max-width:640px;margin:0 auto}
+header h1{margin:0;font-size:20px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
+header h1 small{display:block;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:0}
+.hbtns{display:flex;gap:8px}
+.icon-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;min-width:44px;height:44px;font-size:20px;cursor:pointer;padding:0 10px}
+.icon-btn.txt{font-size:14px;font-weight:700}
+main{max-width:640px;margin:0 auto;padding:8px 16px 24px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:10px 16px;font-size:15px;font-weight:700;cursor:pointer;min-height:44px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:17px;font-weight:800}
+.card p.hint{margin:0 0 12px;font-size:13px;color:var(--muted)}
+.fld{display:block;margin-bottom:12px}
+.fld>span{display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.inp{display:flex;align-items:center;background:var(--field);border:1.5px solid var(--line);border-radius:12px;padding:0 12px}
+.inp:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.inp i{font-style:normal;font-weight:700;color:var(--muted);margin-right:8px}
+.inp input{flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--ink);font:inherit;font-size:20px;font-weight:700;padding:12px 0;outline:0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid3 .inp input{font-size:17px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.posrow{display:flex;gap:6px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none;margin-bottom:12px}
+.posrow::-webkit-scrollbar{display:none}
+.pos{flex:0 0 auto;width:44px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--field);color:var(--ink);font-size:16px;font-weight:800;cursor:pointer}
+.pos.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hero{background:var(--hero);color:#fff;border-radius:22px;padding:20px 18px;margin-bottom:14px;border:2px solid var(--gold)}
+.hero .lbl{font-size:14px;font-weight:700;color:var(--hero-muted)}
+.hero .big{font-size:clamp(34px,11vw,52px);line-height:1.05;font-weight:900;color:var(--gold);margin:6px 0 14px;letter-spacing:-.02em;word-break:break-word}
+.hero .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-top:1px solid rgba(255,255,255,.18);padding:10px 0 0;margin-top:10px}
+.hero .row span{font-size:14px;color:var(--hero-muted);font-weight:600}
+.hero .row b{font-size:22px;font-weight:900;color:#fff;text-align:right}
+.pop{animation:pop .22s ease-out}
+@keyframes pop{0%{transform:scale(.97)}60%{transform:scale(1.02)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.pop{animation:none}}
+.actions{display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px}
+.btn{border:0;border-radius:14px;min-height:50px;padding:0 18px;font-size:16px;font-weight:800;cursor:pointer;color:#fff;background:var(--wa)}
+.btn.ghost{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.btn.full{width:100%;margin-top:6px}
+.tbl{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.tr{display:grid;grid-template-columns:.8fr 1.5fr 1.3fr 1.3fr;gap:6px;padding:10px 12px;border-top:1px solid var(--line);align-items:center;font-size:13px}
+.tr:first-child{border-top:0}
+.tr.th{background:var(--field);font-weight:800;color:var(--muted);font-size:12px}
+.tr .r{text-align:right}
+.tr .pz{font-weight:900;font-size:14px;color:var(--prize);background:var(--prize-bg);border-radius:8px;padding:6px 8px;text-align:right}
+.tr .pn{font-weight:800;font-size:15px}
+.list .li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.list .li:first-child{border-top:0}
+.list .li .nm{font-weight:800;font-size:15px;min-width:54px}
+.list .li .am{font-weight:900;font-size:17px;color:var(--prize);background:var(--prize-bg);border-radius:10px;padding:6px 10px;text-align:right}
+.list .li .mini{width:96px}
+.list .li .mini input{font-size:15px;padding:8px 0}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
+nav .in{display:flex;width:100%;max-width:640px;gap:6px}
+.tabbtn{flex:1;border:0;background:transparent;color:var(--muted);border-radius:12px;padding:6px 2px;font-size:11px;font-weight:700;cursor:pointer;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tabbtn span{font-size:20px;line-height:1}
+.tabbtn.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+#toast.show{opacity:1}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
+
+.balls{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 5px;margin-bottom:6px}
+.ball{border:0;background:none;padding:0;cursor:pointer;color:inherit;text-align:center;font:inherit}
+.ball small{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px}
+.ball b{display:flex;align-items:center;justify-content:center;aspect-ratio:1;border-radius:50%;background:var(--prize-bg);color:var(--prize);font-size:clamp(12px,3.6vw,17px);font-weight:900;border:1.5px solid color-mix(in srgb,var(--prize) 55%,transparent)}
+.ball.top b{background:var(--prize);color:var(--surface);border-color:var(--prize)}
+.meta{font-size:12px;color:var(--muted);margin:0 0 12px}
+.banner{background:var(--prize-bg);color:var(--prize);font-weight:800;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 6px;text-align:center}
+.dcard .em{font-size:36px;line-height:1.1}
+.dcard .no{font-size:12px;color:var(--muted);font-weight:700;margin-top:4px}
+.dcard .nm{font-weight:900;font-size:14px;color:var(--prize);margin-top:2px;word-break:break-word}
+.empty{text-align:center;color:var(--muted);padding:24px 0;font-weight:700}
+</style>
+</head>
+<body>
+<div class="stripe"></div>
+<header>
+  <h1>Cálculos de premios<small>by CRz</small></h1>
+  <div class="hbtns">
+    <button class="icon-btn txt" id="install" hidden>Instalar</button>
+    <button class="icon-btn" id="theme" aria-label="Cambiar modo claro u oscuro">🌙</button>
+  </div>
+</header>
+<main id="app"></main>
+<nav><div class="in">
+  <button class="tabbtn" data-tab="calc"><span>🧮</span>Calcular</button>
+  <button class="tabbtn" data-tab="tabla"><span>📋</span>Tabla</button>
+  <button class="tabbtn" data-tab="mil"><span>💵</span>Por mil</button>
+  <button class="tabbtn" data-tab="res"><span>🎰</span>Resultados</button>
+  <button class="tabbtn" data-tab="sue"><span>💭</span>Sueños</button>
+</div></nav>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const fmt=n=>String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+const gs=n=>'Gs. '+fmt(n);
+const num=s=>Number(String(s).replace(/\D/g,''))||0;
+const one=n=>Math.max(1,n||1);
+
+const NAMES={c3:'3 cifras',c2:'2 cifras',c1:'1 cifra',red:'Redoblona',inv:'Invertida'};
+const DEF={
+  games:{
+    c3:{apuesta:10000,veces:400,rep:2,max:600,postura:2},
+    c2:{apuesta:50000,veces:60,rep:2,max:600,postura:2},
+    c1:{apuesta:500000,veces:6,rep:2,max:600,postura:2},
+    inv:{apuesta:5000,veces:450,rep:2,max:800,postura:1},
+    red:{apuesta:5000,p1:1,p2:7,v1:60,v2:60,rep:2,max:900}
+  },
+  game:'c3', tg:'c3', tab:'calc',
+  mil:{a:1000,grupo:'5',c:1000,rows:{}}
+};
+const KEY='crz_premios_v1';
+let S=load();
+function load(){
+  const base=JSON.parse(JSON.stringify(DEF));
+  try{
+    const raw=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(raw){
+      for(const g in base.games){ if(raw.games&&raw.games[g]) Object.assign(base.games[g],raw.games[g]); }
+      ['game','tg','tab'].forEach(k=>{ if(raw[k]) base[k]=raw[k]; });
+      if(raw.mil) Object.assign(base.mil,raw.mil);
+    }
+  }catch(e){}
+  if(!NAMES[base.game]) base.game='c3';
+  if(!NAMES[base.tg]||base.tg==='red') base.tg='c3';
+  return base;
+}
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
+
+/* ---------- Cálculos (igual que la planilla) ---------- */
+function calc(g,s){
+  if(g==='red'){
+    const p=s.apuesta*s.v1/one(s.p1)*s.v2/one(s.p2);
+    return {premio:p,rep:p*s.rep,max:s.apuesta*s.max/one(s.p1)};
+  }
+  const po=one(s.postura);
+  const p=s.apuesta*s.veces/po;
+  const sinRep=(g!=='inv')&&po===1;
+  return {premio:p,rep:sinRep?null:p*s.rep,max:sinRep?null:s.apuesta*s.max/po};
+}
+
+/* ---------- Utilidades de UI ---------- */
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),1800);}
+function wa(text){window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank');}
+async function copy(text){
+  try{await navigator.clipboard.writeText(text);toast('Copiado');}
+  catch(e){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copiado');}catch(_){toast('No se pudo copiar');}ta.remove();}
+}
+function pop(el){if(!el)return;el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');}
+function field(id,label,val,o={}){
+  return `<label class="fld"><span>${label}</span><div class="inp">${o.pre?`<i>${o.pre}</i>`:''}<input id="${id}" data-k="${o.k||id}" data-money="${o.money?1:0}" type="text" inputmode="numeric" autocomplete="off" value="${o.money?fmt(val):val}"></div></label>`;
+}
+function bindInputs(root,getS,onChange){
+  $$('input[data-k]',root).forEach(inp=>{
+    inp.addEventListener('input',()=>{
+      const v=num(inp.value);
+      if(inp.dataset.money==='1') inp.value=v?fmt(v):'';
+      else if(inp.value!==String(v)&&inp.value!=='') inp.value=String(v);
+      getS()[inp.dataset.k]=v; save(); onChange();
+    });
+    inp.addEventListener('focus',()=>setTimeout(()=>{try{inp.select();}catch(e){}},0));
+  });
+}
+function chipsHTML(list,cur,attr){return `<div class="chips">${list.map(g=>`<button class="chip ${g===cur?'on':''}" ${attr}="${g}">${NAMES[g]}</button>`).join('')}</div>`;}
+
+/* ---------- Pestaña: Calcular ---------- */
+function renderCalc(app){
+  const g=S.game, s=S.games[g], red=g==='red';
+  let h=chipsHTML(['c3','c2','c1','red','inv'],g,'data-game');
+  h+=`<section class="card"><h2>${NAMES[g]}</h2><p class="hint">Cambiá los montos y el resultado se calcula solo.</p>`;
+  h+=field('apuesta','Apuesta',s.apuesta,{money:1,pre:'Gs.'});
+  if(red){
+    h+=`<div class="grid2">${field('p1','Postura 1',s.p1)}${field('p2','Postura 2',s.p2)}</div>`;
+    h+=`<div class="grid2">${field('v1','Veces que paga (1)',s.v1)}${field('v2','Veces que paga (2)',s.v2)}</div>`;
+    h+=`<div class="grid2">${field('rep','Repeticiones',s.rep)}${field('max','Pago máx. (veces)',s.max)}</div>`;
+  }else{
+    h+=`<label class="fld" style="margin-bottom:6px"><span>Postura</span></label><div class="posrow">${Array.from({length:14},(_,i)=>`<button class="pos ${s.postura===i+1?'on':''}" data-pos="${i+1}">${i+1}</button>`).join('')}</div>`;
+    h+=`<div class="grid3">${field('postura','Postura',s.postura)}${field('veces','Veces que paga',s.veces)}${field('rep','Repeticiones',s.rep)}</div>`;
+    h+=field('max','Pago máximo (veces)',s.max);
+  }
+  h+=`</section>`;
+  h+=`<section class="hero" id="hero"><div class="lbl">${red?'Premio redoblona':'Premio'}</div><div class="big" id="r-premio"></div>
+    <div class="row"><span id="l-rep"></span><b id="r-rep"></b></div>
+    <div class="row"><span id="l-max"></span><b id="r-max"></b></div></section>`;
+  h+=`<div class="actions"><button class="btn" id="wa">Compartir por WhatsApp</button><button class="btn ghost" id="cp">Copiar</button></div>`;
+  h+=`<footer>Cálculos de premios by CRz</footer>`;
+  app.innerHTML=h;
+  $$('[data-game]',app).forEach(b=>b.onclick=()=>{S.game=b.dataset.game;save();render();});
+  $$('[data-pos]',app).forEach(b=>b.onclick=()=>{
+    s.postura=Number(b.dataset.pos);save();
+    $('#postura').value=s.postura;
+    $$('[data-pos]',app).forEach(x=>x.classList.toggle('on',x===b));
+    updateCalc();
+  });
+  bindInputs(app,()=>S.games[S.game],()=>{
+    if(!red){ $$('[data-pos]',app).forEach(x=>x.classList.toggle('on',Number(x.dataset.pos)===s.postura)); }
+    updateCalc();
+  });
+  $('#wa').onclick=()=>wa(calcText());
+  $('#cp').onclick=()=>copy(calcText().replace(/\*/g,''));
+  updateCalc(true);
+}
+function updateCalc(first){
+  const g=S.game,s=S.games[g],r=calc(g,s);
+  $('#r-premio').textContent=gs(r.premio);
+  $('#l-rep').textContent=`Por repeticiones (x${s.rep})`;
+  $('#l-max').textContent=`Pago máximo (${s.max} veces)`;
+  $('#r-rep').textContent=r.rep==null?'—':gs(r.rep);
+  $('#r-max').textContent=r.max==null?'—':gs(r.max);
+  if(!first) pop($('#hero'));
+}
+function calcText(){
+  const g=S.game,s=S.games[g],r=calc(g,s);
+  let t=`🎯 *Cálculos de premios by CRz*\n🎲 Juego: ${NAMES[g]}\n💵 Apuesta: ${gs(s.apuesta)}\n`;
+  if(g==='red') t+=`📍 Posturas: ${s.p1} y ${s.p2} (paga ${s.v1} x ${s.v2})\n`;
+  else t+=`📍 Postura: ${s.postura} (paga ${s.veces} veces)\n`;
+  t+=`━━━━━━━━━━\n🏆 *PREMIO: ${gs(r.premio)}*\n`;
+  if(r.rep!=null) t+=`🔁 Por repeticiones (x${s.rep}): *${gs(r.rep)}*\n`;
+  if(r.max!=null) t+=`⭐ Pago máximo (${s.max} veces): *${gs(r.max)}*`;
+  return t.trim();
+}
+
+/* ---------- Pestaña: Tabla ---------- */
+function renderTabla(app){
+  const g=S.tg,s=S.games[g];
+  let h=chipsHTML(['c3','c2','c1','inv'],g,'data-tg');
+  h+=`<section class="card"><h2>Tabla de ${NAMES[g]}</h2><p class="hint">Posturas del 1 al 14 con el mismo monto.</p>`;
+  h+=field('apuesta','Apuesta',s.apuesta,{money:1,pre:'Gs.'});
+  h+=`<div class="grid3">${field('veces','Veces que paga',s.veces)}${field('rep','Repeticiones',s.rep)}${field('max','Pago máx. (veces)',s.max)}</div></section>`;
+  h+=`<div class="tbl" id="tbl"></div>`;
+  h+=`<div class="actions" style="margin-top:14px"><button class="btn" id="wa">Compartir por WhatsApp</button><button class="btn ghost" id="cp">Copiar</button></div>`;
+  app.innerHTML=h;
+  $$('[data-tg]',app).forEach(b=>b.onclick=()=>{S.tg=b.dataset.tg;save();render();});
+  bindInputs(app,()=>S.games[S.tg],updateTabla);
+  $('#wa').onclick=()=>wa(tablaText());
+  $('#cp').onclick=()=>copy(tablaText().replace(/\*/g,''));
+  updateTabla();
+}
+function tablaRows(){
+  const g=S.tg,s=S.games[g];
+  return Array.from({length:14},(_,i)=>({p:i+1,r:calc(g,{...s,postura:i+1})}));
+}
+function updateTabla(){
+  let h=`<div class="tr th"><span>Postura</span><span class="r">Premio</span><span class="r">x Rep.</span><span class="r">Máximo</span></div>`;
+  tablaRows().forEach(({p,r})=>{
+    h+=`<div class="tr"><span class="pn">${p}</span><span class="pz">${fmt(r.premio)}</span><span class="r">${r.rep==null?'—':fmt(r.rep)}</span><span class="r">${r.max==null?'—':fmt(r.max)}</span></div>`;
+  });
+  $('#tbl').innerHTML=h;
+}
+function tablaText(){
+  const g=S.tg,s=S.games[g];
+  let t=`📋 *Tabla ${NAMES[g]} · Cálculos de premios by CRz*\n💵 Apuesta: ${gs(s.apuesta)} (paga ${s.veces} veces)\n━━━━━━━━━━\n`;
+  tablaRows().forEach(({p,r})=>{
+    t+=`Postura ${p}: *${gs(r.premio)}*`;
+    if(r.rep!=null) t+=` | x${s.rep}: ${gs(r.rep)} | Máx: ${gs(r.max)}`;
+    t+='\n';
+  });
+  return t.trim();
+}
+
+/* ---------- Pestaña: Por cada mil ---------- */
+const COMBOS={
+  '5':['5-7','5-8','5-9','5-10','5-11','5-12','5-13','5-14'].map(l=>[l,1000]),
+  '7':['7-7','7-8','7-9','7-10','7-11','7-12','7-13','7-14'].map(l=>[l,1000]),
+  '10':[['10-10',2000],['10-11',1000],['10-12',1000],['10-13',1000],['10-14',1000],['11-11',1000],['12-12',1000],['14-14',1000]]
+};
+const comboPrize=(l,m)=>{const [a,b]=l.split('-').map(Number);return m*60/a*60/b;};
+const rowM=(l,d)=>(S.mil.rows[l]!==undefined?S.mil.rows[l]:d);
+function renderMil(app){
+  const m=S.mil;
+  let h=`<section class="card"><h2>Redoblona por monto</h2><p class="hint">Posturas 7 a 14 con el monto que elijas.</p>`;
+  h+=`<div class="chips">${[1000,2500,5000].map(v=>`<button class="chip ${m.a===v?'on':''}" data-a="${v}">${fmt(v)}</button>`).join('')}</div>`;
+  h+=field('mil-a','Monto',m.a,{money:1,pre:'Gs.',k:'a'});
+  h+=`<div class="list" id="listA"></div><button class="btn full" data-share="A">Compartir por WhatsApp</button></section>`;
+
+  h+=`<section class="card"><h2>Redoblona combinada</h2><p class="hint">Elegí la primera postura y editá el monto de cada fila.</p>`;
+  h+=`<div class="chips">${['5','7','10'].map(v=>`<button class="chip ${m.grupo===v?'on':''}" data-g="${v}">A los ${v}</button>`).join('')}</div>`;
+  h+=`<div class="list" id="listB">${COMBOS[m.grupo].map(([l,d])=>`<div class="li"><span class="nm">${l}</span><div class="inp mini"><i>Gs.</i><input data-row="${l}" type="text" inputmode="numeric" autocomplete="off" value="${fmt(rowM(l,d))}"></div><span class="am" data-r="${l}"></span></div>`).join('')}</div>`;
+  h+=`<button class="btn full" data-share="B">Compartir por WhatsApp</button></section>`;
+
+  h+=`<section class="card"><h2>Premios por cada monto</h2><p class="hint">Posturas del 1 al 14.</p>`;
+  h+=field('mil-c','Monto',m.c,{money:1,pre:'Gs.',k:'c'});
+  h+=`<div class="list" id="listC"></div><button class="btn full" data-share="C">Compartir por WhatsApp</button></section>`;
+  app.innerHTML=h;
+
+  $$('[data-a]',app).forEach(b=>b.onclick=()=>{m.a=Number(b.dataset.a);save();$('#mil-a').value=fmt(m.a);$$('[data-a]',app).forEach(x=>x.classList.toggle('on',x===b));updateMil();});
+  $$('[data-g]',app).forEach(b=>b.onclick=()=>{m.grupo=b.dataset.g;save();renderMil(app);});
+  bindInputs(app,()=>S.mil,()=>{$$('[data-a]',app).forEach(x=>x.classList.toggle('on',Number(x.dataset.a)===m.a));updateMil();});
+  $$('input[data-row]',app).forEach(inp=>{
+    inp.addEventListener('input',()=>{const v=num(inp.value);inp.value=v?fmt(v):'';m.rows[inp.dataset.row]=v;save();updateMil();});
+    inp.addEventListener('focus',()=>setTimeout(()=>{try{inp.select();}catch(e){}},0));
+  });
+  $$('[data-share]',app).forEach(b=>b.onclick=()=>wa(milText(b.dataset.share)));
+  updateMil();
+}
+function milA(){return Array.from({length:8},(_,i)=>{const p=i+7;return [p,S.mil.a*60/1*60/p];});}
+function milC(){return Array.from({length:14},(_,i)=>{const p=i+1;return [p,S.mil.c*60/p];});}
+function milB(){return COMBOS[S.mil.grupo].map(([l,d])=>{const mo=rowM(l,d);return [l,mo,comboPrize(l,mo)];});}
+function updateMil(){
+  $('#listA').innerHTML=milA().map(([p,v])=>`<div class="li"><span class="nm">Postura ${p}</span><span class="am">${fmt(v)}</span></div>`).join('');
+  $('#listC').innerHTML=milC().map(([p,v])=>`<div class="li"><span class="nm">Postura ${p}</span><span class="am">${fmt(v)}</span></div>`).join('');
+  milB().forEach(([l,mo,v])=>{const el=$(`[data-r="${l}"]`);if(el)el.textContent=fmt(v);});
+}
+function milText(w){
+  const H='*Cálculos de premios by CRz*';
+  if(w==='A') return `💵 ${H}\nRedoblona por ${gs(S.mil.a)}\n━━━━━━━━━━\n`+milA().map(([p,v])=>`Postura ${p}: *${gs(v)}*`).join('\n');
+  if(w==='C') return `💵 ${H}\nPremios por ${gs(S.mil.c)}\n━━━━━━━━━━\n`+milC().map(([p,v])=>`Postura ${p}: *${gs(v)}*`).join('\n');
+  return `💵 ${H}\nRedoblona a los ${S.mil.grupo}\n━━━━━━━━━━\n`+milB().map(([l,mo,v])=>`${l} (${gs(mo)}): *${gs(v)}*`).join('\n');
+}
+
+/* ---------- Resultados ---------- */
+const DREAMS=[
+  ["🥚","Huevos"],
+  ["💧","Agua"],
+  ["👶","Niño"],
+  ["😇","San Cono"],
+  ["🛏️","La cama"],
+  ["🐱","Gato"],
+  ["🐶","Perro"],
+  ["🔫","Revólver"],
+  ["🚒","Incendio"],
+  ["🌊","Arroyo"],
+  ["🥛","Leche"],
+  ["⛏️","Minero"],
+  ["🎖️","Soldado"],
+  ["🎱","La yeta"],
+  ["🥴","Borracho"],
+  ["👧","Niña Bonita"],
+  ["💍","Anillo"],
+  ["⚠️","Desgracia"],
+  ["🩸","Sangre"],
+  ["🐟","Pescado"],
+  ["🎉","La fiesta"],
+  ["🚺","Mujer"],
+  ["🤪","Loco"],
+  ["👨\u200d🍳","Cocinero"],
+  ["🐴","Caballo"],
+  ["🐔","Gallina"],
+  ["🔔","La misa"],
+  ["💇","El peine"],
+  ["⛰️","El cerro"],
+  ["🗝️","San Pedro"],
+  ["🌹","Santa Rosa"],
+  ["💡","La Luz"],
+  ["💵","Dinero"],
+  ["✝️","Cristo"],
+  ["🧠","La Cabeza"],
+  ["🐦","Pajarito"],
+  ["🧈","La Manteca"],
+  ["🦷","El Dentista"],
+  ["🪨","Piedras"],
+  ["🌧️","La lluvia"],
+  ["🙏","El cura"],
+  ["🔪","El cuchillo"],
+  ["🩴","Zapatillas"],
+  ["🏛️","Balcón"],
+  ["⛓️","La Cárcel"],
+  ["🍷","El Vino"],
+  ["🍅","Tomates"],
+  ["⚰️","Muerto"],
+  ["🗣️","Muerto que habla"],
+  ["🥩","La Carne"],
+  ["🍞","El Pan"],
+  ["🪚","Serrucho"],
+  ["🤱","Madre e hijo"],
+  ["🚢","El Barco"],
+  ["🐮","Vaca"],
+  ["🎵","La música"],
+  ["🤕","La caída"],
+  ["🧓","El Jorobado"],
+  ["🏊","El Ahogado"],
+  ["🌿","Las Plantas"],
+  ["🕯️","La Virgen"],
+  ["🎯","La Escopeta"],
+  ["🏚️","Inundación"],
+  ["💒","Casamiento"],
+  ["😢","El Llanto"],
+  ["🏹","El Cazador"],
+  ["🐛","Lombriz"],
+  ["🍎","Mordida"],
+  ["👨\u200d👧","Sobrinos"],
+  ["🚬","Vicios"],
+  ["☠️","Muerto Sueño"],
+  ["💩","Excremento"],
+  ["🎁","Sorpresa"],
+  ["🏥","Hospital"],
+  ["👥","Gente Negra"],
+  ["💋","Besos"],
+  ["🔥","Llamas"],
+  ["🦵","Piernas de Mujer"],
+  ["💄","Ramera"],
+  ["🦹","Ladrón"],
+  ["⚪","La Bocha"],
+  ["💐","Las flores"],
+  ["🥊","La pelea"],
+  ["⛈️","El mal tiempo"],
+  ["⛪","Iglesia"],
+  ["🔦","Linterna"],
+  ["🏭","Humo"],
+  ["🐜","Piojos"],
+  ["👴","El Papa"],
+  ["🐀","La Rata"],
+  ["😱","Miedo"],
+  ["🚽","Excusado"],
+  ["🩺","Doctor"],
+  ["💘","Enamorado"],
+  ["🪦","Cementerio"],
+  ["👓","Anteojos"],
+  ["💑","Marido"],
+  ["🍽️","Mesa"],
+  ["🧺","Lavandería"],
+  ["👬","Hermanos"]
+];
+const SORTEOS=[['tempranero','Sorteo Tempranero','🌅','10:45'],['matutino','Sorteo Matutino','☀️','12:45'],['vespertino','Sorteo Vespertino','🌤️','16:30'],['nocturno','Sorteo Nocturno','🌙','20:15']];
+const SLOTS=[[10,45],[12,45],[16,30],[20,15]];
+let RES=null,resLoaded=0,resErr=false;
+const p2=n=>String(n).padStart(2,'0');
+const dm=n=>{const d=n.slice(-2);return `${d} · ${DREAMS[Number(d)][1]}`;};
+async function fetchRes(mode){
+  try{
+    const r=await fetch('resultados.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    const j=await r.json();
+    const changed=!RES||RES.actualizado!==j.actualizado;
+    RES=j;resErr=false;resLoaded=Date.now();
+    try{localStorage.setItem('crz_res',JSON.stringify(j));}catch(e){}
+    if(mode==='manual') toast(changed?'Resultados actualizados':'Sin novedades todavía');
+    else if(mode==='auto'&&changed&&S.tab==='res') toast('Resultados actualizados');
+  }catch(e){
+    resErr=true;
+    if(!RES){try{RES=JSON.parse(localStorage.getItem('crz_res')||'null');}catch(_){}}
+    if(mode==='manual') toast('No se pudo actualizar');
+  }
+  if(S.tab==='res') renderRes();
+}
+function renderRes(app){
+  app=app||$('#app');
+  let h='';
+  if(!RES){
+    h+=`<section class="card"><h2>Resultados</h2><p class="hint">${resErr?'No se pudieron cargar los resultados. Revisá tu conexión.':'Cargando…'}</p></section>`;
+  }else{
+    const n=new Date(),hoy=n.getFullYear()+'-'+p2(n.getMonth()+1)+'-'+p2(n.getDate());
+    const [y,mo,d]=String(RES.fecha||'').split('-');
+    const act=new Date(RES.actualizado);
+    const cuando=isNaN(act)?'':act.toLocaleString('es-PY',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    if(RES.fecha!==hoy) h+=`<div class="banner">Mostrando resultados del ${d}/${mo}/${y}. Los de hoy aparecen a medida que se sortean.</div>`;
+    h+=`<p class="meta">Actualizado: ${cuando}. Tocá una bola para ver qué significan sus 2 últimas cifras.</p>`;
+    SORTEOS.forEach(([k,nm,ic,hr])=>{
+      const nums=(RES.sorteos||{})[k];
+      h+=`<section class="card"><h2>${ic} ${nm}</h2><p class="meta">Se actualiza a las ${hr}</p>`;
+      if(nums&&nums.length){
+        h+=`<div class="balls">${nums.map((x,i)=>`<button class="ball ${i===0?'top':''}" data-n="${x}"><small>${p2(i+1)}</small><b>${x}</b></button>`).join('')}</div>`;
+        h+=`<button class="btn full" data-sh="${k}">Compartir por WhatsApp</button>`;
+      }else h+=`<p class="hint">Todavía sin resultados.</p>`;
+      h+=`</section>`;
+    });
+  }
+  h+=`<button class="btn ghost full" id="refr">Actualizar ahora</button>`;
+  app.innerHTML=h;
+  $$('[data-n]',app).forEach(b=>b.onclick=()=>toast(dm(b.dataset.n)));
+  $$('[data-sh]',app).forEach(b=>b.onclick=()=>wa(resText(b.dataset.sh)));
+  const rb=$('#refr',app);if(rb) rb.onclick=()=>fetchRes('manual');
+}
+function resText(k){
+  const s=SORTEOS.find(x=>x[0]===k),nums=RES.sorteos[k];
+  const [y,mo,d]=RES.fecha.split('-');
+  return `🎰 *Resultados · Cálculos de premios by CRz*\n${s[2]} ${s[1]} · ${d}/${mo}/${y}\n━━━━━━━━━━\n`+nums.map((x,i)=>`${p2(i+1)}: ${i===0?`*${x}*`:x}`).join('\n');
+}
+function slotTick(){
+  if(document.hidden) return;
+  const n=new Date(),m=n.getHours()*60+n.getMinutes();
+  const win=SLOTS.some(([h,mi])=>{const d=m-(h*60+mi);return d>=0&&d<=20;});
+  if(win&&Date.now()-resLoaded>=110000) fetchRes('auto');
+}
+setInterval(slotTick,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-resLoaded>300000) fetchRes('auto');});
+
+/* ---------- Sueños 00-99 ---------- */
+let QUERY='';
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function renderSue(app){
+  app.innerHTML=`<section class="card"><h2>Sueños del 00 al 99</h2><p class="hint">Buscá por número o por palabra.</p><div class="inp"><i>🔍</i><input id="q" type="text" inputmode="search" autocomplete="off" placeholder="Ej: 05 o gato" value=""></div></section><div class="dgrid" id="dg"></div>`;
+  const q=$('#q');q.value=QUERY;
+  q.addEventListener('input',()=>{QUERY=q.value;updSue();});
+  updSue();
+}
+function updSue(){
+  const q=norm(QUERY.trim());
+  const dig=/^\d+$/.test(q);
+  const list=DREAMS.map((d,i)=>({i,e:d[0],n:d[1]})).filter(x=>{
+    if(!q) return true;
+    const pad=p2(x.i);
+    if(dig) return q.length===1?(pad.startsWith('0'+q)||pad.startsWith(q)):pad===q.slice(0,2);
+    return norm(x.n).includes(q);
+  });
+  $('#dg').innerHTML=list.length?list.map(x=>`<div class="dcard"><div class="em">${x.e}</div><div class="no">Nº ${p2(x.i)}</div><div class="nm">${x.n}</div></div>`).join(''):`<div class="empty" style="grid-column:1/-1">No hay coincidencias.</div>`;
+}
+
+/* ---------- Navegación, tema e instalación ---------- */
+function render(){
+  $$('.tabbtn').forEach(b=>b.classList.toggle('on',b.dataset.tab===S.tab));
+  const app=$('#app');
+  if(S.tab==='tabla') renderTabla(app); else if(S.tab==='mil') renderMil(app); else if(S.tab==='res') renderRes(app); else if(S.tab==='sue') renderSue(app); else renderCalc(app);
+  window.scrollTo(0,0);
+}
+$$('.tabbtn').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;save();render();});
+
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  $('#theme').textContent=t==='dark'?'☀️':'🌙';
+  const m=document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute('content',t==='dark'?'#0C1220':'#0038A8');
+}
+$('#theme').onclick=()=>{
+  const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+  applyTheme(t);
+  try{localStorage.setItem('crz_theme',t);}catch(e){}
+};
+applyTheme(document.documentElement.getAttribute('data-theme'));
+
+let deferred=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('#install').hidden=false;});
+$('#install').onclick=async()=>{if(!deferred)return;deferred.prompt();await deferred.userChoice;deferred=null;$('#install').hidden=true;};
+window.addEventListener('appinstalled',()=>{$('#install').hidden=true;});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+render();
+fetchRes();
+</script>
+</body>
+</html>
