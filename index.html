@@ -114,6 +114,11 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
 .dcard .em{font-size:36px;line-height:1.1}
 .dcard .no{font-size:12px;color:var(--muted);font-weight:700;margin-top:4px}
 .dcard .nm{font-weight:900;font-size:14px;color:var(--prize);margin-top:2px;word-break:break-word}
+.inp.locked{background:transparent;border-style:dashed}
+.inp.locked input{color:var(--muted);cursor:default}
+.inp i.lk{margin:0 0 0 6px;font-size:14px}
+.disc{max-width:640px;margin:0 auto;padding:0 16px 12px;text-align:center;color:var(--muted);font-size:12px}
+.disc p{margin:4px 0}
 .empty{text-align:center;color:var(--muted);padding:24px 0;font-weight:700}
 </style>
 </head>
@@ -127,6 +132,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
   </div>
 </header>
 <main id="app"></main>
+<footer class="disc"><p><b>Esta app fue creada solo con fines informativos y no comerciales.</b></p><p>Cálculos de premios by CRz</p></footer>
 <nav><div class="in">
   <button class="tabbtn" data-tab="calc"><span>🧮</span>Calcular</button>
   <button class="tabbtn" data-tab="tabla"><span>📋</span>Tabla</button>
@@ -169,6 +175,7 @@ function load(){
       if(raw.mil) Object.assign(base.mil,raw.mil);
     }
   }catch(e){}
+  for(const g in base.games){ const d=DEF.games[g]; ['veces','rep','max','v1','v2'].forEach(k=>{ if(k in d) base.games[g][k]=d[k]; }); }
   if(!NAMES[base.game]) base.game='c3';
   if(!NAMES[base.tg]||base.tg==='red') base.tg='c3';
   return base;
@@ -196,7 +203,8 @@ async function copy(text){
 }
 function pop(el){if(!el)return;el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');}
 function field(id,label,val,o={}){
-  return `<label class="fld"><span>${label}</span><div class="inp">${o.pre?`<i>${o.pre}</i>`:''}<input id="${id}" data-k="${o.k||id}" data-money="${o.money?1:0}" type="text" inputmode="numeric" autocomplete="off" value="${o.money?fmt(val):val}"></div></label>`;
+  const lk=o.lock?' readonly aria-readonly="true" tabindex="-1"':'';
+  return `<label class="fld"><span>${label}</span><div class="inp${o.lock?' locked':''}">${o.pre?`<i>${o.pre}</i>`:''}<input id="${id}" data-k="${o.k||id}" data-money="${o.money?1:0}" type="text" inputmode="${o.lock?'none':'numeric'}" autocomplete="off" value="${o.money?fmt(val):val}"${lk}>${o.lock?'<i class="lk" title="Fijo según el reglamento">🔒</i>':''}</div></label>`;
 }
 function bindInputs(root,getS,onChange){
   $$('input[data-k]',root).forEach(inp=>{
@@ -204,6 +212,7 @@ function bindInputs(root,getS,onChange){
       const v=num(inp.value);
       if(inp.dataset.money==='1') inp.value=v?fmt(v):'';
       else if(inp.value!==String(v)&&inp.value!=='') inp.value=String(v);
+      if(inp.readOnly) return;
       getS()[inp.dataset.k]=v; save(); onChange();
     });
     inp.addEventListener('focus',()=>setTimeout(()=>{try{inp.select();}catch(e){}},0));
@@ -215,23 +224,22 @@ function chipsHTML(list,cur,attr){return `<div class="chips">${list.map(g=>`<but
 function renderCalc(app){
   const g=S.game, s=S.games[g], red=g==='red';
   let h=chipsHTML(['c3','c2','c1','red','inv'],g,'data-game');
-  h+=`<section class="card"><h2>${NAMES[g]}</h2><p class="hint">Cambiá los montos y el resultado se calcula solo.</p>`;
+  h+=`<section class="card"><h2>${NAMES[g]}</h2><p class="hint">Cambiá los montos y el resultado se calcula solo. Los datos con 🔒 son fijos, según el reglamento del juego.</p>`;
   h+=field('apuesta','Apuesta',s.apuesta,{money:1,pre:'Gs.'});
   if(red){
     h+=`<div class="grid2">${field('p1','Postura 1',s.p1)}${field('p2','Postura 2',s.p2)}</div>`;
-    h+=`<div class="grid2">${field('v1','Veces que paga (1)',s.v1)}${field('v2','Veces que paga (2)',s.v2)}</div>`;
-    h+=`<div class="grid2">${field('rep','Repeticiones',s.rep)}${field('max','Pago máx. (veces)',s.max)}</div>`;
+    h+=`<div class="grid2">${field('v1','Veces que paga (1)',s.v1,{lock:1})}${field('v2','Veces que paga (2)',s.v2,{lock:1})}</div>`;
+    h+=`<div class="grid2">${field('rep','Repeticiones',s.rep,{lock:1})}${field('max','Pago máx. (veces)',s.max,{lock:1})}</div>`;
   }else{
     h+=`<label class="fld" style="margin-bottom:6px"><span>Postura</span></label><div class="posrow">${Array.from({length:14},(_,i)=>`<button class="pos ${s.postura===i+1?'on':''}" data-pos="${i+1}">${i+1}</button>`).join('')}</div>`;
-    h+=`<div class="grid3">${field('postura','Postura',s.postura)}${field('veces','Veces que paga',s.veces)}${field('rep','Repeticiones',s.rep)}</div>`;
-    h+=field('max','Pago máximo (veces)',s.max);
+    h+=`<div class="grid3">${field('postura','Postura',s.postura)}${field('veces','Veces que paga',s.veces,{lock:1})}${field('rep','Repeticiones',s.rep,{lock:1})}</div>`;
+    h+=field('max','Pago máximo (veces)',s.max,{lock:1});
   }
   h+=`</section>`;
   h+=`<section class="hero" id="hero"><div class="lbl">${red?'Premio redoblona':'Premio'}</div><div class="big" id="r-premio"></div>
     <div class="row"><span id="l-rep"></span><b id="r-rep"></b></div>
     <div class="row"><span id="l-max"></span><b id="r-max"></b></div></section>`;
   h+=`<div class="actions"><button class="btn" id="wa">Compartir por WhatsApp</button><button class="btn ghost" id="cp">Copiar</button></div>`;
-  h+=`<footer>Cálculos de premios by CRz</footer>`;
   app.innerHTML=h;
   $$('[data-game]',app).forEach(b=>b.onclick=()=>{S.game=b.dataset.game;save();render();});
   $$('[data-pos]',app).forEach(b=>b.onclick=()=>{
@@ -274,7 +282,7 @@ function renderTabla(app){
   let h=chipsHTML(['c3','c2','c1','inv'],g,'data-tg');
   h+=`<section class="card"><h2>Tabla de ${NAMES[g]}</h2><p class="hint">Posturas del 1 al 14 con el mismo monto.</p>`;
   h+=field('apuesta','Apuesta',s.apuesta,{money:1,pre:'Gs.'});
-  h+=`<div class="grid3">${field('veces','Veces que paga',s.veces)}${field('rep','Repeticiones',s.rep)}${field('max','Pago máx. (veces)',s.max)}</div></section>`;
+  h+=`<div class="grid3">${field('veces','Veces que paga',s.veces,{lock:1})}${field('rep','Repeticiones',s.rep,{lock:1})}${field('max','Pago máx. (veces)',s.max,{lock:1})}</div></section>`;
   h+=`<div class="tbl" id="tbl"></div>`;
   h+=`<div class="actions" style="margin-top:14px"><button class="btn" id="wa">Compartir por WhatsApp</button><button class="btn ghost" id="cp">Copiar</button></div>`;
   app.innerHTML=h;
