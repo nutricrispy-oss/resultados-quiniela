@@ -120,6 +120,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
 .disc{max-width:640px;margin:0 auto;padding:0 16px 12px;text-align:center;color:var(--muted);font-size:12px}
 .disc p{margin:4px 0}
 .inp textarea{flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;font-weight:600;padding:12px 0;outline:0;resize:vertical}
+.warn{background:color-mix(in srgb,var(--red) 16%,transparent);border:1.5px solid var(--red);color:var(--ink);font-weight:800;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:24px 0;font-weight:700}
 </style>
 </head>
@@ -189,10 +190,24 @@ function calc(g,s){
     const p=s.apuesta*s.v1/one(s.p1)*s.v2/one(s.p2);
     return {premio:p,rep:p*s.rep,max:s.apuesta*s.max/one(s.p1)};
   }
-  const po=one(s.postura);
+  const po=Math.min(14,one(s.postura));
   const p=s.apuesta*s.veces/po;
   const sinRep=(g!=='inv')&&po===1;
-  return {premio:p,rep:sinRep?null:p*s.rep,max:sinRep?null:s.apuesta*s.max/po};
+  let rp=sinRep?null:p*s.rep, mx=sinRep?null:s.apuesta*s.max/po, capped=false;
+  // Reglamento Art. 12 / 41.8: con repeticiones nunca se paga más que el máximo (se liquida una sola vez).
+  if(rp!=null&&mx!=null&&rp>mx){rp=mx;capped=true;}
+  return {premio:p,rep:rp,max:mx,capped};
+}
+// Reglamento: postura 1 a 14; redoblona: postura 2 de 7 a 14 y no menor que la postura 1 (Art. 42.3 y 42.4).
+function validar(g,s){
+  if(g==='red'){
+    if(s.p1<1||s.p1>14) return 'La postura 1 va de 1 a 14.';
+    if(s.p2<7||s.p2>14) return 'La postura 2 (redoblona) va de 7 a 14.';
+    if(s.p2<s.p1) return 'La postura 2 no puede ser menor que la postura 1.';
+    return '';
+  }
+  if(s.postura<1||s.postura>14) return 'La postura va de 1 a 14.';
+  return '';
 }
 
 /* ---------- Utilidades de UI ---------- */
@@ -225,20 +240,21 @@ function chipsHTML(list,cur,attr){return `<div class="chips">${list.map(g=>`<but
 function renderCalc(app){
   const g=S.game, s=S.games[g], red=g==='red';
   let h=chipsHTML(['c3','c2','c1','red','inv'],g,'data-game');
-  h+=`<section class="card"><h2>${NAMES[g]}</h2><p class="hint">Cambiá los montos y el resultado se calcula solo. Los datos con 🔒 son fijos, según el reglamento del juego.</p>`;
+  h+=`<section class="card"><h2>${NAMES[g]}</h2><p class="hint">Cambiá los montos y el resultado se calcula solo. Los datos con 🔒 son fijos, según el reglamento del juego.${red?' La redoblona se juega solo sobre las 2 últimas cifras: postura 1 de 1 a 14 y postura 2 de 7 a 14, nunca menor que la 1.':g==='inv'?' El monto es por cada combinación; el total jugado es 6 veces ese monto.':''}</p>`;
   h+=field('apuesta','Apuesta',s.apuesta,{money:1,pre:'Gs.'});
   if(red){
     h+=`<div class="grid2">${field('p1','Postura 1',s.p1)}${field('p2','Postura 2',s.p2)}</div>`;
     h+=`<div class="grid2">${field('v1','Veces que paga (1)',s.v1,{lock:1})}${field('v2','Veces que paga (2)',s.v2,{lock:1})}</div>`;
-    h+=`<div class="grid2">${field('rep','Repeticiones',s.rep,{lock:1})}${field('max','Pago máx. (veces)',s.max,{lock:1})}</div>`;
+    h+=field('max','Pago máximo (veces)',s.max,{lock:1});
   }else{
     h+=`<label class="fld" style="margin-bottom:6px"><span>Postura</span></label><div class="posrow">${Array.from({length:14},(_,i)=>`<button class="pos ${s.postura===i+1?'on':''}" data-pos="${i+1}">${i+1}</button>`).join('')}</div>`;
     h+=`<div class="grid3">${field('postura','Postura',s.postura)}${field('veces','Veces que paga',s.veces,{lock:1})}${field('rep','Repeticiones',s.rep,{lock:1})}</div>`;
     h+=field('max','Pago máximo (veces)',s.max,{lock:1});
   }
   h+=`</section>`;
+  h+=`<div id="vmsg" class="warn" hidden></div>`;
   h+=`<section class="hero" id="hero"><div class="lbl">${red?'Premio redoblona':'Premio'}</div><div class="big" id="r-premio"></div>
-    <div class="row"><span id="l-rep"></span><b id="r-rep"></b></div>
+    ${red?'':'<div class="row"><span id="l-rep"></span><b id="r-rep"></b></div>'}
     <div class="row"><span id="l-max"></span><b id="r-max"></b></div></section>`;
   h+=`<div class="actions"><button class="btn" id="wa">Compartir por WhatsApp</button><button class="btn ghost" id="cp">Copiar</button></div>`;
   app.innerHTML=h;
@@ -253,17 +269,18 @@ function renderCalc(app){
     if(!red){ $$('[data-pos]',app).forEach(x=>x.classList.toggle('on',Number(x.dataset.pos)===s.postura)); }
     updateCalc();
   });
-  $('#wa').onclick=()=>wa(calcText());
-  $('#cp').onclick=()=>copy(calcText().replace(/\*/g,''));
+  $('#wa').onclick=()=>{const v=validar(S.game,S.games[S.game]);if(v){toast(v);return;}wa(calcText());};
+  $('#cp').onclick=()=>{const v=validar(S.game,S.games[S.game]);if(v){toast(v);return;}copy(calcText().replace(/\*/g,''));};
   updateCalc(true);
 }
 function updateCalc(first){
-  const g=S.game,s=S.games[g],r=calc(g,s);
-  $('#r-premio').textContent=gs(r.premio);
-  $('#l-rep').textContent=`Por repeticiones (x${s.rep})`;
+  const g=S.game,s=S.games[g],r=calc(g,s),v=validar(g,s),ok=!v;
+  const vm=$('#vmsg'); vm.textContent=v; vm.hidden=ok;
+  $('#r-premio').textContent=ok?gs(r.premio):'—';
+  if($('#l-rep')) $('#l-rep').textContent=`Por repeticiones (x${s.rep})`+(r.capped?' · tope del máximo':'');
   $('#l-max').textContent=`Pago máximo (${s.max} veces)`;
-  $('#r-rep').textContent=r.rep==null?'—':gs(r.rep);
-  $('#r-max').textContent=r.max==null?'—':gs(r.max);
+  if($('#r-rep')) $('#r-rep').textContent=(!ok||r.rep==null)?'—':gs(r.rep);
+  $('#r-max').textContent=(!ok||r.max==null)?'—':gs(r.max);
   if(!first) pop($('#hero'));
 }
 function calcText(){
@@ -272,7 +289,7 @@ function calcText(){
   if(g==='red') t+=`📍 Posturas: ${s.p1} y ${s.p2} (paga ${s.v1} x ${s.v2})\n`;
   else t+=`📍 Postura: ${s.postura} (paga ${s.veces} veces)\n`;
   t+=`━━━━━━━━━━\n🏆 *PREMIO: ${gs(r.premio)}*\n`;
-  if(r.rep!=null) t+=`🔁 Por repeticiones (x${s.rep}): *${gs(r.rep)}*\n`;
+  if(r.rep!=null&&g!=='red') t+=`🔁 Por repeticiones (x${s.rep})${r.capped?' · tope del máximo':''}: *${gs(r.rep)}*\n`;
   if(r.max!=null) t+=`⭐ Pago máximo (${s.max} veces): *${gs(r.max)}*`;
   return t.trim();
 }
@@ -281,7 +298,7 @@ function calcText(){
 function renderTabla(app){
   const g=S.tg,s=S.games[g];
   let h=chipsHTML(['c3','c2','c1','inv'],g,'data-tg');
-  h+=`<section class="card"><h2>Tabla de ${NAMES[g]}</h2><p class="hint">Posturas del 1 al 14 con el mismo monto.</p>`;
+  h+=`<section class="card"><h2>Tabla de ${NAMES[g]}</h2><p class="hint">Posturas del 1 al 14 con el mismo monto. Si las repeticiones superan el pago máximo, se paga el máximo.</p>`;
   h+=field('apuesta','Apuesta',s.apuesta,{money:1,pre:'Gs.'});
   h+=`<div class="grid3">${field('veces','Veces que paga',s.veces,{lock:1})}${field('rep','Repeticiones',s.rep,{lock:1})}${field('max','Pago máx. (veces)',s.max,{lock:1})}</div></section>`;
   h+=`<div class="tbl" id="tbl"></div>`;
