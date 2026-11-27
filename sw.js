@@ -1,4 +1,4 @@
-const CACHE = 'crz-premios-v7';
+const CACHE = 'crz-premios-v8';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
@@ -26,6 +26,15 @@ self.addEventListener('fetch', e => {
         return r;
       }).catch(() => caches.match(key))
     );
+    return;
+  }
+
+  // Lector OCR (archivos pesados e inmutables): primero la copia guardada, sin revalidar.
+  if (url.origin === location.origin && url.pathname.includes('/ocr/')) {
+    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
+      if (r && r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
+      return r;
+    })));
     return;
   }
 
