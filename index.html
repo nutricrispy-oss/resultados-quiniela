@@ -694,7 +694,7 @@ function parseBoleta(txt){
     const r=restDig(tok);let v=r?Number(r):1; if(v>14||v<1) v=Number(r[0])||1; return v;};
   let pendR=null;
   raw.split(/\r?\n/).forEach(ln=>{
-    const s=ln.trim(); if(!s) return;
+    const s=ln.trim().replace(/(^|[\s_.])S(\d{2})\s*$/,'$15$2'); if(!s) return;
     const t=s.match(new RegExp('total\\D{0,60}'+AMT,'i'));
     if(t){out.total=money(t[1]);return;}
     let a=s.match(new RegExp('(?:^|\\D)(\\d)\\s*[.,]\\s*(\\d)\\s*[.,]\\s*(\\d)\\s+(\\S+)\\s+'+AMT));
@@ -704,8 +704,8 @@ function parseBoleta(txt){
     if(a&&!new RegExp(AMT).test(s)&&pendR){pendR.n2=a[1];pendR.p2=postura('R'+a[2]);out.lines.push(pendR);pendR=null;return;}
     a=s.match(new RegExp('^\\D{0,4}?(\\d{2})\\s+[Rr](\\S*?)\\s+'+AMT));
     if(a){pendR={tipo:'red',n:a[1],p:postura('R'+a[2]),m:money(a[3]),n2:'',p2:7};return;}
-    a=s.match(new RegExp('^\\D{0,4}?(\\d{1,3})\\s+([CcPp][A-Za-z0-9|]*)\\s+'+AMT));
-    if(a){const c=/^[Cc]/.test(a[2]);out.lines.push({tipo:'dir',n:a[1],p:c?1:postura(a[2]),m:money(a[3]),n2:'',p2:7});return;}
+    a=s.match(new RegExp('^\\D{0,4}?(\\d{1,3})[\\s~\\-\u2014\\u2013_.]*([CcPp\u00a2][A-Za-z0-9|\\\\/]*)[\\s_.]*'+AMT));
+    if(a){const c=/^[Cc\u00a2]/.test(a[2]);out.lines.push({tipo:'dir',n:a[1],p:c?1:postura(a[2]),m:money(a[3]),n2:'',p2:7});return;}
     if(/^\D{0,4}\d{1,3}\s+[A-Za-z]/.test(s)&&new RegExp(AMT).test(s)) out.ignoradas.push(s);
   });
   if(pendR){out.ignoradas.push('Redoblona '+pendR.n+' sin su segundo número');}
@@ -853,13 +853,33 @@ function votar(rs,esRes){ // une varias lecturas: gana la mayoría; si no hay, s
       const mismos=rs.filter(r=>r.lines.filter(x=>x.tipo===L.tipo).length===base.lines.filter(x=>x.tipo===L.tipo).length).map(r=>r.lines.filter(x=>x.tipo===L.tipo)[ord]);
       const N=Object.assign({},L);
       ['n','p','m','n2','p2'].forEach(f=>{const v=pick(mismos.map(x=>String(x[f])).filter(s=>s!==''&&s!=='0'),String(L[f]),`Jugada ${i+1}`);N[f]=(f==='n'||f==='n2')?v:Number(v);});
-      // lecturas descartadas (no cierran con el total) que difieren en una sola cifra: avisar, no ocultar
-      ['n','n2'].forEach(f=>{if(!N[f]) return;const ya=out.dudas.some(d=>d.startsWith(`Jugada ${i+1}:`)&&d.includes(f==='n'?'':'\u0000'));
-        const alt=new Set(todas.filter(r=>r.lines.filter(x=>x.tipo===L.tipo).length===base.lines.filter(x=>x.tipo===L.tipo).length).map(r=>(r.lines.filter(x=>x.tipo===L.tipo)[ord]||{})[f]).filter(v=>v&&v!==N[f]&&v.length===N[f].length&&[...v].filter((c,k)=>c!==N[f][k]).length===1));
-        if(alt.size&&!out.dudas.some(d=>d.startsWith(`Jugada ${i+1}:`))) out.dudas.push(`Jugada ${i+1}: leí ${N[f]} pero otra lectura dio ${[...alt].join(' / ')}`);});
       return N;
     });
-    out.suma=out.lines.reduce((s,L)=>s+L.m,0);
+    const key=L=>[L.tipo,L.n,L.p,L.m,L.n2,L.p2].join('|');
+    const tt=modo(todas.map(r=>r.total).filter(v=>v!=null)),te=Object.entries(tt).sort((a,b)=>b[1]-a[1]);
+    if(te.length) out.total=Number(te[0][0]);
+    let suma=out.lines.reduce((s,L)=>s+L.m,0);
+    // si falta plata para llegar al total, se agregan jugadas vistas en otras lecturas (y se avisa)
+    if(out.total!=null&&suma<out.total){
+      const cnt={},cand={};
+      todas.forEach(r=>{const seen=new Set();r.lines.forEach(L=>{if(L.tipo==='red')return;const k=key(L);cand[k]=L;if(!seen.has(k)){seen.add(k);cnt[k]=(cnt[k]||0)+1;}});});
+      const enBase={};out.lines.forEach(L=>{enBase[key(L)]=(enBase[key(L)]||0)+1;});
+      const orden=Object.keys(cand).filter(k=>!enBase[k]).sort((a,b)=>cnt[b]-cnt[a]||cand[b].n.length-cand[a].n.length);
+      for(const k of orden){const L=cand[k];if(suma+L.m>out.total) continue;
+        out.lines.push(Object.assign({},L));suma+=L.m;out.dudas.push(`Jugada ${out.lines.length}: ${L.n} la agregué de otra lectura para cerrar con el total`);
+        if(suma>=out.total) break;}
+    }
+    // cifras dudosas: otra lectura dio algo casi igual (una cifra distinta, de más o de menos) que no es otra jugada ya leída
+    const lev1=(a,b)=>{if(Math.abs(a.length-b.length)>1||a===b) return false;let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;
+      return a.length===b.length?a.slice(i+1)===b.slice(i+1):(a.length>b.length?a.slice(i+1)===b.slice(i):a.slice(i)===b.slice(i+1));};
+    const finales=new Set(out.lines.map(L=>L.n));
+    out.lines.forEach((L,i)=>{
+      if(out.dudas.some(d=>d.startsWith(`Jugada ${i+1}:`))) return;
+      const alt=new Set();
+      todas.forEach(r=>r.lines.forEach(x=>{if(x.tipo===L.tipo&&x.m===L.m&&x.p===L.p&&x.n&&!finales.has(x.n)&&lev1(L.n,x.n)) alt.add(x.n);}));
+      if(alt.size) out.dudas.push(`Jugada ${i+1}: leí ${L.n} pero otra lectura dio ${[...alt].join(' / ')}`);
+    });
+    out.suma=suma;
   }
   return out;
 }
