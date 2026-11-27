@@ -572,9 +572,12 @@ function renderRes(app){
   const lista=dom?SORTEOS.filter(s=>s[0]==='vespertino'||s[0]==='nocturno'):SORTEOS;
   if(!LD||!lista.some(s=>s[0]===LD)) LD=sugerido(lista);
   const day=HIST[RDATE]||{};
-  let h=`<section class="card"><h2>Cargar resultados</h2><p class="hint">Abrí la página oficial, copiá los números y pegalos acá. También podés escribir los 14 números de 3 cifras.${dom?' Ese día es domingo: solo hay sorteo Vespertino y Nocturno.':''}</p>
+  let h=`<section class="card"><h2>Cargar resultados</h2><p class="hint">Subí una foto del resultado y la app lee la fecha, el sorteo y los 14 números; revisalos y guardá. También podés pegar o escribir los 14 números de 3 cifras.${dom?' Ese día es domingo: solo hay sorteo Vespertino y Nocturno.':''}</p>
   <label class="fld"><span>Fecha del sorteo</span><div class="inp"><i>📅</i><input id="rfecha" type="text" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="dd/mm/aaaa" value="${iso2fmt(RDATE)}"></div></label>
   <div class="chips">${lista.map(s=>`<button class="chip ${s[0]===LD?'on':''}" data-ld="${s[0]}">${s[2]} ${s[1].replace('Sorteo ','')}</button>`).join('')}</div>
+  <input type="file" id="rfoto" accept="image/*" hidden>
+  <button class="btn full" id="rleer" style="background:var(--accent);color:var(--accent-ink);margin-bottom:8px">📷 Cargar desde una foto</button>
+  <div id="rprog" class="meta" style="font-weight:700"></div>
   <label class="fld"><span>Resultados copiados</span><div class="inp"><textarea id="paste" rows="3" autocomplete="off" placeholder="Pegá o escribí los números acá"></textarea></div></label>
   <div id="rmsg" class="meta" style="color:var(--red);font-weight:700"></div>
   <button class="btn full" id="gres" style="background:var(--accent);color:var(--accent-ink)">Guardar resultados</button>
@@ -597,6 +600,25 @@ function renderRes(app){
   const rh=$('#rhoy',app);if(rh) rh.onclick=()=>{RDATE=hoyStr();renderRes(app);};
   $$('[data-ld]',app).forEach(b=>b.onclick=()=>{const v=$('#paste').value;LD=b.dataset.ld;renderRes(app);$('#paste').value=v;});
   $('#gres',app).onclick=()=>guardarRes(app);
+  $('#rleer',app).onclick=()=>$('#rfoto',app).click();
+  $('#rfoto',app).addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0];if(!f) return;
+    const url=URL.createObjectURL(f),pg=$('#rprog',app),msg=$('#rmsg',app);msg.textContent='';
+    try{
+      const r=await leerFoto(url,(t,x)=>{pg.textContent=t+(x?' '+Math.round(x*100)+'%':'');},parseResultados,r=>r.fecha&&r.sorteo&&r.nums.every(Boolean),true);
+      pg.textContent='';
+      const fi=r.fecha?fmt2iso(r.fecha):null;if(fi) RDATE=fi;
+      const dom=new Date(RDATE+'T12:00:00').getDay()===0;
+      if(r.sorteo&&(!dom||r.sorteo==='vespertino'||r.sorteo==='nocturno')) LD=r.sorteo;
+      renderRes(app);
+      $('#paste').value=r.nums.map((x,i)=>x?`${i+1}- ${x}`:`${i+1}- ?`).join('\n');
+      const falt=r.nums.map((x,i)=>x?0:i+1).filter(Boolean),m2=$('#rmsg');
+      const av=[];if(!r.fecha)av.push('No pude leer la fecha.');if(!r.sorteo)av.push('No pude leer el sorteo.');if(falt.length)av.push('No pude leer los puestos: '+falt.join(', ')+'.');(r.dudas||[]).forEach(d=>av.push(d+'.'));
+      m2.style.color=av.length?'var(--red)':'inherit';
+      m2.textContent=av.length?av.join(' ')+' Completá lo que falta y guardá.':'✅ Leí fecha, sorteo y los 14 números. Revisalos contra la foto y tocá Guardar.';
+    }catch(err){pg.textContent='';$('#rmsg',app).textContent='No se pudo leer la foto. Si es la primera vez, hace falta internet para descargar el lector. Podés escribir los números a mano.';}
+    finally{URL.revokeObjectURL(url);}
+  });
   $$('[data-n]',app).forEach(b=>b.onclick=()=>toast(dm(b.dataset.n)));
   $$('[data-sh]',app).forEach(b=>b.onclick=()=>wa(resText(b.dataset.sh)));
   $$('[data-del]',app).forEach(b=>b.onclick=()=>{
@@ -667,22 +689,42 @@ function parseBoleta(txt){
   else if(/noctur|noct/.test(low)) out.sorteo='nocturno';
   const AMT='(\\d{1,3}(?:[.,]\\d{3})+)\\s*$';
   const money=s=>Number(s.replace(/[.,]/g,''));
-  const postura=tok=>{ // "C1","Cl","CI"=1; "I11"->11; vacío->1
-    const r=tok.slice(1).replace(/[lIi|]/g,'1').replace(/\D/g,'');
-    let v=r?Number(r):1; if(v>14||v<1) v=Number(r[0])||1; return v;};
+  const restDig=tok=>tok.slice(1).replace(/[lIi|]/g,'1').replace(/[Oo]/g,'0').replace(/\D/g,'');
+  const postura=tok=>{ // "I1","Cl"=1; "P10"=10; vacío=1; >14 -> primera cifra
+    const r=restDig(tok);let v=r?Number(r):1; if(v>14||v<1) v=Number(r[0])||1; return v;};
+  let pendR=null;
   raw.split(/\r?\n/).forEach(ln=>{
     const s=ln.trim(); if(!s) return;
     const t=s.match(new RegExp('total\\D{0,60}'+AMT,'i'));
     if(t){out.total=money(t[1]);return;}
     let a=s.match(new RegExp('(?:^|\\D)(\\d)\\s*[.,]\\s*(\\d)\\s*[.,]\\s*(\\d)\\s+(\\S+)\\s+'+AMT));
-    if(a){out.lines.push({tipo:'inv',n:a[1]+a[2]+a[3],p:postura(a[4]),m:money(a[5]),n2:'',p2:7,amb:/\d{2}/.test(a[4].slice(1).replace(/[lIi|]/g,'1'))});return;}
-    a=s.match(new RegExp('^\\D{0,4}?(\\d{1,3})\\s+([A-Za-z][A-Za-z0-9|]*)\\s+'+AMT));
-    if(a){out.lines.push({tipo:'dir',n:a[1],p:postura(a[2]),m:money(a[3]),n2:'',p2:7,amb:/\d{2}/.test(a[2].slice(1).replace(/[lIi|]/g,'1'))});return;}
+    if(a){out.lines.push({tipo:'inv',n:a[1]+a[2]+a[3],p:postura(a[4]),m:money(a[5]),n2:'',p2:7,amb:restDig(a[4]).length>1});return;}
+    // redoblona: "21 R1 ..... 1.000" y debajo "33 R7 ..... xx"
+    a=s.match(/^\D{0,4}?(\d{2})\s+[Rr](\S*)/);
+    if(a&&!/\d[.,]\d{3}\s*$/.test(s)&&pendR){pendR.n2=a[1];pendR.p2=postura('R'+a[2]);out.lines.push(pendR);pendR=null;return;}
+    a=s.match(new RegExp('^\\D{0,4}?(\\d{2})\\s+[Rr](\\S*?)\\s+'+AMT));
+    if(a){pendR={tipo:'red',n:a[1],p:postura('R'+a[2]),m:money(a[3]),n2:'',p2:7};return;}
+    a=s.match(new RegExp('^\\D{0,4}?(\\d{1,3})\\s+([CcPp][A-Za-z0-9|]*)\\s+'+AMT));
+    if(a){const c=/^[Cc]/.test(a[2]);out.lines.push({tipo:'dir',n:a[1],p:c?1:postura(a[2]),m:money(a[3]),n2:'',p2:7});return;}
     if(/\d[.,]\d{3}\s*$/.test(s)) out.ignoradas.push(s);
   });
-  // postura ambigua (p.ej. "I11"): se usa la de las demás jugadas del mismo tipo si coincide
-  out.lines.forEach(L=>{if(L.amb){const o=out.lines.filter(x=>x!==L&&!x.amb&&x.tipo===L.tipo).map(x=>x.p);if(o.length&&o.every(v=>v===o[0])&&(L.p===11||L.p===12||L.p===13||L.p===14||L.p>14)) L.p=o[0];}delete L.amb;});
+  if(pendR){out.ignoradas.push('Redoblona '+pendR.n+' sin su segundo número');}
+  out.lines.forEach(L=>{if(L.amb){const o=out.lines.filter(x=>x!==L&&!x.amb&&x.tipo===L.tipo).map(x=>x.p);if(o.length&&o.every(v=>v===o[0])&&L.p>=10) L.p=o[0];}delete L.amb;});
   out.suma=out.lines.reduce((s,L)=>s+L.m,0);
+  return out;
+}
+function parseResultados(txt){
+  const out={fecha:'',sorteo:'',nums:[]};
+  const raw=String(txt||'');
+  let m=raw.match(/(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(20\d{2})/);
+  if(m) out.fecha=String(+m[1]).padStart(2,'0')+'/'+String(+m[2]).padStart(2,'0')+'/'+m[3];
+  const low=raw.toLowerCase();
+  if(/tempran/.test(low)) out.sorteo='tempranero'; else if(/matut/.test(low)) out.sorteo='matutino';
+  else if(/vesper|vespe/.test(low)) out.sorteo='vespertino'; else if(/noctur/.test(low)) out.sorteo='nocturno';
+  const got={};
+  const re=/(\d{1,2})\s*[-–—~=:]\s*(\d{3})(?!\d)/g;let q;
+  while((q=re.exec(raw))){const i=+q[1];if(i>=1&&i<=14&&!got[i]) got[i]=q[2];}
+  for(let i=1;i<=14;i++) out.nums.push(got[i]||'');
   return out;
 }
 /*ENDENGINE*/
@@ -769,7 +811,8 @@ function renderBol(app){
 
 /* ---------- OCR de la foto (Tesseract.js, se descarga solo al usarlo) ---------- */
 function loadScript(src){return new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>ko(new Error('No se pudo cargar '+src));document.head.appendChild(s);});}
-function prepImg(img){
+function rawImg(img){const s=Math.min(1,1600/img.naturalWidth),c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return c;}
+function prepImg(img,kk){
   const sc=Math.min(1.6,1600/img.naturalWidth);
   const w=Math.round(img.naturalWidth*sc),hh=Math.round(img.naturalHeight*sc);
   const c=document.createElement('canvas');c.width=w;c.height=hh;const x=c.getContext('2d');x.drawImage(img,0,0,w,hh);
@@ -777,7 +820,7 @@ function prepImg(img){
   for(let i=0;i<w*hh;i++) g[i]=0.299*p[i*4]+0.587*p[i*4+1]+0.114*p[i*4+2];
   const S=new Float64Array((w+1)*(hh+1));
   for(let y=0;y<hh;y++){let row=0;for(let xx=0;xx<w;xx++){row+=g[y*w+xx];S[(y+1)*(w+1)+xx+1]=S[y*(w+1)+xx+1]+row;}}
-  const R=Math.round(Math.max(w,hh)/24),k=0.12;
+  const R=Math.round(Math.max(w,hh)/24),k=kk||0.12;
   for(let y=0;y<hh;y++)for(let xx=0;xx<w;xx++){
     const x0=Math.max(0,xx-R),x1=Math.min(w,xx+R+1),y0=Math.max(0,y-R),y1=Math.min(hh,y+R+1);
     const sum=S[y1*(w+1)+x1]-S[y0*(w+1)+x1]-S[y1*(w+1)+x0]+S[y0*(w+1)+x0];
@@ -786,22 +829,56 @@ function prepImg(img){
   x.putImageData(d,0,0);return c;
 }
 const okLectura=r=>r.lines.length>0&&r.total!=null&&r.suma===r.total;
-async function leerFoto(url,onProg){
+const modo=a=>a.reduce((m,v)=>{m[v]=(m[v]||0)+1;return m;},{});
+function votar(rs,esRes){ // une varias lecturas: gana la mayoría; si no hay, se avisa la duda
+  const sc=x=>x.lines?x.lines.length+(okLectura(x)?100:0):x.nums.filter(Boolean).length;
+  const base=rs.reduce((b,x)=>sc(x)>sc(b)?x:b,rs[0]);
+  const top=k=>{const c=modo(rs.map(x=>x[k]).filter(Boolean)),e=Object.entries(c).sort((a,b)=>b[1]-a[1]);return e.length?e[0][0]:'';};
+  const out=Object.assign({},base,{fecha:top('fecha')||base.fecha,sorteo:top('sorteo')||base.sorteo,dudas:[]});
+  const pick=(vals,cur,etq)=>{ // vals: lecturas de un mismo dato
+    const c=modo(vals),e=Object.entries(c).sort((a,b)=>b[1]-a[1]);
+    if(!e.length) return cur;
+    if(e.length>1&&e[0][1]===e[1][1]){out.dudas.push(`${etq}: dudé entre ${e.map(x=>x[0]).join(' y ')}`);return cur;}
+    if(e.length>1) out.dudas.push(`${etq}: leí ${e[0][0]} (otra lectura dio ${e[1][0]})`);
+    return e[0][0];
+  };
+  if(esRes){
+    out.nums=base.nums.map((x,i)=>pick(rs.map(r=>r.nums[i]).filter(Boolean),x,`Puesto ${i+1}`));
+  }else{
+    const tc=base.lines.map(()=>0);
+    out.lines=base.lines.map((L,i)=>{
+      const ord=base.lines.slice(0,i).filter(x=>x.tipo===L.tipo).length;
+      const mismos=rs.filter(r=>r.lines.filter(x=>x.tipo===L.tipo).length===base.lines.filter(x=>x.tipo===L.tipo).length).map(r=>r.lines.filter(x=>x.tipo===L.tipo)[ord]);
+      const N=Object.assign({},L);
+      ['n','p','m','n2','p2'].forEach(f=>{const v=pick(mismos.map(x=>String(x[f])).filter(s=>s!==''&&s!=='0'),String(L[f]),`Jugada ${i+1}`);N[f]=(f==='n'||f==='n2')?v:Number(v);});
+      return N;
+    });
+    out.suma=out.lines.reduce((s,L)=>s+L.m,0);
+  }
+  return out;
+}
+async function leerFoto(url,onProg,parse,ok,esRes){
+  parse=parse||parseBoleta;ok=ok||(r=>okLectura(r)&&r.fecha&&r.sorteo);
   if(!window.Tesseract){onProg('Descargando el lector (solo la primera vez, ~11 MB)…',0);await loadScript('ocr/tesseract.min.js');}
   const img=new Image();img.src=url;await img.decode();
-  const cv=prepImg(img);
+  const cvs={adapt:prepImg(img),raw:rawImg(img),adapt2:prepImg(img,0.06)};
+  const VAR=[['adapt','6'],['raw','6'],['adapt','4'],['raw','4'],['adapt2','6']];
+  const sig=r=>esRes?r.nums.join(','):JSON.stringify(r.lines);
   const wk=await Tesseract.createWorker('eng',1,{workerPath:'ocr/worker.min.js',corePath:'ocr/',langPath:'ocr/',gzip:true,
-    logger:m=>{if(m.status==='recognizing text')onProg('Leyendo la boleta…',m.progress);else if(/loading|initializing/.test(m.status))onProg('Preparando el lector…',m.progress||0);}});
+    logger:m=>{if(/loading|initializing/.test(m.status))onProg('Preparando el lector…',m.progress||0);}});
   try{
-    let best=null;
-    for(const psm of ['6','4']){
-      await wk.setParameters({tessedit_pageseg_mode:psm,preserve_interword_spaces:'1'});
-      const r=await wk.recognize(cv);
-      const pr=parseBoleta(r.data.text);
-      if(!best||(pr.lines.length>best.lines.length&&!okLectura(best))||okLectura(pr)&&!okLectura(best)) best=pr;
-      if(okLectura(best)&&best.fecha&&best.sorteo) break;
+    const rs=[];
+    for(let i=0;i<VAR.length;i++){
+      onProg(`Leyendo… (${i+1} de ${VAR.length})`,0);
+      await wk.setParameters({tessedit_pageseg_mode:VAR[i][1],preserve_interword_spaces:'1'});
+      const r=await wk.recognize(cvs[VAR[i][0]]);
+      rs.push(parse(r.data.text));
+      // dos lecturas distintas que coinciden y están completas: alcanza
+      if(rs.length>=2&&ok(rs[0])&&sig(rs[0])===sig(rs[rs.length-1])&&(rs[0].fecha||'')===(rs[rs.length-1].fecha||'')) break;
     }
-    return best;
+    const f=votar(rs,esRes);
+    f.lecturas=rs.length;
+    return f;
   }finally{try{await wk.terminate();}catch(e){}}
 }
 let LECT=null; // resultado de la última lectura (para el aviso)
@@ -821,6 +898,7 @@ async function hacerLectura(app,btn){
     if(!r.sorteo) av.push('No pude leer el sorteo.');
     if(r.total==null) av.push('No encontré el total impreso para comprobar.');
     else if(r.suma!==r.total) av.push(`La suma de los montos leídos (${gs(r.suma)}) no coincide con el total de la boleta (${gs(r.total)}): falta o está mal leída alguna jugada.`);
+    (r.dudas||[]).forEach(d=>av.push(d+'.'));
     if(r.ignoradas.length) av.push(`No pude interpretar ${r.ignoradas.length} línea(s) con importe (por ejemplo redoblonas): cargalas a mano.`);
     LECT={ok:!av.length,av};
     renderBol(app);
