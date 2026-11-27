@@ -94,7 +94,7 @@ main{max-width:640px;margin:0 auto;padding:8px 16px 24px}
 .list .li .mini input{font-size:15px;padding:8px 0}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
 nav .in{display:flex;width:100%;max-width:640px;gap:6px}
-.tabbtn{flex:1;border:0;background:transparent;color:var(--muted);border-radius:12px;padding:6px 2px;font-size:11px;font-weight:700;cursor:pointer;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tabbtn{flex:1;min-width:0;border:0;background:transparent;color:var(--muted);border-radius:12px;padding:6px 1px;font-size:10.5px;font-weight:700;cursor:pointer;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 .tabbtn span{font-size:20px;line-height:1}
 .tabbtn.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
 #toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
@@ -121,6 +121,17 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
 .disc p{margin:4px 0}
 .inp textarea{flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;font-weight:600;padding:12px 0;outline:0;resize:vertical}
 .warn{background:color-mix(in srgb,var(--red) 16%,transparent);border:1.5px solid var(--red);color:var(--ink);font-weight:800;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+.ball.hit b{background:var(--gold);color:#12203A;border-color:var(--gold);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 40%,transparent)}
+.foto{display:block;width:100%;max-height:42vh;object-fit:contain;border-radius:12px;border:1px solid var(--line);background:var(--field);margin-bottom:6px;cursor:zoom-in}
+.foto.big{max-height:none;cursor:zoom-out}
+.lcard{border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0;background:var(--field)}
+.lhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.icon-btn.sm{min-width:36px;height:36px;font-size:15px;padding:0 8px}
+.linkbtn{border:0;background:none;color:inherit;text-decoration:underline;font:inherit;font-weight:800;cursor:pointer;padding:0 0 0 6px}
+#bol .btn{margin-bottom:10px}
+#bol .chips{flex-wrap:wrap;overflow:visible}
+#bol .list .li{align-items:flex-start}
+#bol .list .li .am{white-space:nowrap}
 .empty{text-align:center;color:var(--muted);padding:24px 0;font-weight:700}
 </style>
 </head>
@@ -141,6 +152,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 0}
   <button class="tabbtn" data-tab="mil"><span>💵</span>Por mil</button>
   <button class="tabbtn" data-tab="res"><span>🎰</span>Resultados</button>
   <button class="tabbtn" data-tab="sue"><span>💭</span>Sueños</button>
+  <button class="tabbtn" data-tab="bol"><span>🧾</span>Boleta</button>
 </div></nav>
 <div id="toast"></div>
 
@@ -486,12 +498,38 @@ const DREAMS=[
   ["👬","Hermanos"]
 ];
 const SORTEOS=[['tempranero','Sorteo Tempranero','🌅'],['matutino','Sorteo Matutino','☀️'],['vespertino','Sorteo Vespertino','🌤️'],['nocturno','Sorteo Nocturno','🌙']];
-let RES=null,LD=null;
 const p2=n=>String(n).padStart(2,'0');
 const dm=n=>{const d=n.slice(-2);return `${d} · ${DREAMS[Number(d)][1]}`;};
 const hoyStr=()=>{const n=new Date();return n.getFullYear()+'-'+p2(n.getMonth()+1)+'-'+p2(n.getDate());};
-function loadRes(){try{RES=JSON.parse(localStorage.getItem('crz_manual')||'null');}catch(e){RES=null;}}
-function saveRes(){try{localStorage.setItem('crz_manual',JSON.stringify(RES));}catch(e){}}
+
+/* ---- Fechas (campo de texto: siempre abre el teclado para escribir) ---- */
+const iso2fmt=i=>{const [y,m,d]=i.split('-');return `${d}/${m}/${y}`;};
+function fmt2iso(s){
+  const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s||'').trim());
+  if(!m) return null;
+  const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d) return null;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+function maskFecha(inp){
+  const v=inp.value.replace(/\D/g,'').slice(0,8);
+  inp.value=v.length>4?v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4):v.length>2?v.slice(0,2)+'/'+v.slice(2):v;
+}
+const diasDesde=iso=>Math.round((new Date(hoyStr()+'T12:00:00')-new Date(iso+'T12:00:00'))/86400000);
+
+/* ---- Historial de resultados por fecha (se conservan 120 días) ---- */
+const HKEY='crz_hist';
+let HIST={};
+function saveHist(){try{localStorage.setItem(HKEY,JSON.stringify(HIST));}catch(e){}}
+function loadHist(){
+  try{HIST=JSON.parse(localStorage.getItem(HKEY)||'{}')||{};}catch(e){HIST={};}
+  try{ // migra lo guardado con la versión anterior (solo un día)
+    const old=JSON.parse(localStorage.getItem('crz_manual')||'null');
+    if(old&&old.fecha&&old.sorteos){HIST[old.fecha]=Object.assign({},old.sorteos,HIST[old.fecha]||{});saveHist();localStorage.removeItem('crz_manual');}
+  }catch(e){}
+  Object.keys(HIST).forEach(k=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||diasDesde(k)>120) delete HIST[k];});
+  saveHist();
+}
 function sugerido(lista){
   const n=new Date(),m=n.getHours()*60+n.getMinutes();
   const k=m<12*60?'tempranero':m<16*60?'matutino':m<20*60?'vespertino':'nocturno';
@@ -508,37 +546,43 @@ function extraerSorteos(t){
   });
   return out;
 }
+
+/* ---------- Resultados ---------- */
+let RDATE=null,LD=null;
 function guardarRes(app){
   const t=$('#paste').value,msg=$('#rmsg');
+  const iso=fmt2iso($('#rfecha').value);
+  if(!iso){msg.textContent='Escribí la fecha completa, por ejemplo 27/11/2026.';return;}
   let found=extraerSorteos(t);
   if(!Object.keys(found).length){
     const nums=t.match(/\b\d{3}\b/g)||[];
     if(nums.length<14){msg.textContent=`Encontré ${nums.length} números de 3 cifras y hacen falta 14.`;return;}
     found[LD]=nums.slice(0,14);
   }
-  const hoy=hoyStr();
-  if(!RES||RES.fecha!==hoy) RES={fecha:hoy,sorteos:{}};
-  Object.assign(RES.sorteos,found);
-  RES.actualizado=new Date().toISOString();
-  saveRes();
+  RDATE=iso;
+  HIST[iso]=Object.assign(HIST[iso]||{},found);
+  saveHist();
   toast(Object.keys(found).length>1?'Sorteos guardados':'Sorteo guardado');
   renderRes(app);
 }
 function renderRes(app){
   app=app||$('#app');
-  const dom=new Date().getDay()===0;
+  if(!RDATE) RDATE=hoyStr();
+  const dom=new Date(RDATE+'T12:00:00').getDay()===0;
   const lista=dom?SORTEOS.filter(s=>s[0]==='vespertino'||s[0]==='nocturno'):SORTEOS;
   if(!LD||!lista.some(s=>s[0]===LD)) LD=sugerido(lista);
-  let h=`<section class="card"><h2>Cargar resultados</h2><p class="hint">Abrí la página oficial, copiá los números y pegalos acá. También podés escribir los 14 números de 3 cifras.${dom?' Los domingos solo hay sorteo Vespertino y Nocturno.':''}</p>
+  const day=HIST[RDATE]||{};
+  let h=`<section class="card"><h2>Cargar resultados</h2><p class="hint">Abrí la página oficial, copiá los números y pegalos acá. También podés escribir los 14 números de 3 cifras.${dom?' Ese día es domingo: solo hay sorteo Vespertino y Nocturno.':''}</p>
+  <label class="fld"><span>Fecha del sorteo</span><div class="inp"><i>📅</i><input id="rfecha" type="text" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="dd/mm/aaaa" value="${iso2fmt(RDATE)}"></div></label>
   <div class="chips">${lista.map(s=>`<button class="chip ${s[0]===LD?'on':''}" data-ld="${s[0]}">${s[2]} ${s[1].replace('Sorteo ','')}</button>`).join('')}</div>
   <label class="fld"><span>Resultados copiados</span><div class="inp"><textarea id="paste" rows="3" autocomplete="off" placeholder="Pegá o escribí los números acá"></textarea></div></label>
   <div id="rmsg" class="meta" style="color:var(--red);font-weight:700"></div>
   <button class="btn full" id="gres" style="background:var(--accent);color:var(--accent-ink)">Guardar resultados</button>
   <a class="btn ghost full" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="https://www.quiniela.com.py/resultados" target="_blank" rel="noopener">Abrir página oficial</a></section>`;
-  if(RES&&RES.fecha!==hoyStr()){const [y,mo,d]=RES.fecha.split('-');h+=`<div class="banner">Mostrando resultados cargados el ${d}/${mo}/${y}.</div>`;}
-  h+=`<p class="meta">Tocá una bola para ver qué significan sus 2 últimas cifras.</p>`;
+  if(RDATE!==hoyStr()) h+=`<div class="banner">Mostrando resultados del ${iso2fmt(RDATE)}. <button class="linkbtn" id="rhoy">Volver a hoy</button></div>`;
+  h+=`<p class="meta">Tocá una bola para ver qué significan sus 2 últimas cifras. Los resultados quedan guardados por fecha para verificar boletas.</p>`;
   lista.forEach(([k,nm,ic])=>{
-    const nums=RES&&RES.sorteos&&RES.sorteos[k];
+    const nums=day[k];
     h+=`<section class="card"><h2>${ic} ${nm}</h2>`;
     if(nums&&nums.length){
       h+=`<div class="balls">${nums.map((x,i)=>`<button class="ball ${i===0?'top':''}" data-n="${x}"><small>${p2(i+1)}</small><b>${x}</b></button>`).join('')}</div>`;
@@ -547,16 +591,198 @@ function renderRes(app){
     h+=`</section>`;
   });
   app.innerHTML=h;
+  const rf=$('#rfecha',app);
+  rf.addEventListener('input',()=>maskFecha(rf));
+  rf.addEventListener('change',()=>{const iso=fmt2iso(rf.value);if(iso){RDATE=iso;renderRes(app);}else rf.value=iso2fmt(RDATE);});
+  const rh=$('#rhoy',app);if(rh) rh.onclick=()=>{RDATE=hoyStr();renderRes(app);};
   $$('[data-ld]',app).forEach(b=>b.onclick=()=>{const v=$('#paste').value;LD=b.dataset.ld;renderRes(app);$('#paste').value=v;});
   $('#gres',app).onclick=()=>guardarRes(app);
   $$('[data-n]',app).forEach(b=>b.onclick=()=>toast(dm(b.dataset.n)));
   $$('[data-sh]',app).forEach(b=>b.onclick=()=>wa(resText(b.dataset.sh)));
-  $$('[data-del]',app).forEach(b=>b.onclick=()=>{delete RES.sorteos[b.dataset.del];saveRes();renderRes(app);});
+  $$('[data-del]',app).forEach(b=>b.onclick=()=>{
+    delete day[b.dataset.del];
+    if(!Object.keys(day).length) delete HIST[RDATE];
+    saveHist();renderRes(app);
+  });
 }
 function resText(k){
-  const s=SORTEOS.find(x=>x[0]===k),nums=RES.sorteos[k];
-  const [y,mo,d]=RES.fecha.split('-');
-  return `🎰 *Resultados · Cálculos de premios by CRz*\n${s[2]} ${s[1]} · ${d}/${mo}/${y}\n━━━━━━━━━━\n`+nums.map((x,i)=>`${p2(i+1)}: ${i===0?`*${x}*`:x}`).join('\n');
+  const s=SORTEOS.find(x=>x[0]===k),nums=HIST[RDATE][k];
+  return `🎰 *Resultados · Cálculos de premios by CRz*\n${s[2]} ${s[1]} · ${iso2fmt(RDATE)}\n━━━━━━━━━━\n`+nums.map((x,i)=>`${p2(i+1)}: ${i===0?`*${x}*`:x}`).join('\n');
+}
+
+/*ENGINE*/
+/* ---------- Motor de cálculo de boletas (Reglamento de la Quiniela) ---------- */
+const MULT={1:6,2:60,3:400};           // Art. 8: veces que paga a la cabeza (1, 2 y 3 cifras)
+const PERMS=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+function evalLinea(L,res){
+  const bad=msg=>({ok:false,msg});
+  const m=Number(L.m)||0, p=Number(L.p)||0;
+  if(!m) return bad('Falta el monto.');
+  if(L.tipo==='red'){
+    const a=String(L.n||""),b=String(L.n2||""),q2=Number(L.p2)||0;
+    if(a.length!==2||b.length!==2) return bad('La redoblona se juega con 2 cifras en cada número.');
+    if(p<1||p>14) return bad('La postura 1 va de 1 a 14.');
+    if(q2<7||q2>14) return bad('La postura de la redoblona va de 7 a 14.');
+    if(q2<p) return bad('La postura de la redoblona no puede ser menor que la primera.');
+    const SA=[],SB=[],ini=p===1?2:1,fin=p===1?Math.min(14,q2+1):q2; // Art. 42.8 y 42.9
+    for(let i=1;i<=p;i++) if(res[i-1].slice(-2)===a) SA.push(i);
+    for(let i=ini;i<=fin;i++) if(res[i-1].slice(-2)===b) SB.push(i);
+    let pares=0; SA.forEach(x=>SB.forEach(y=>{if(x!==y) pares++;}));
+    const unitario=m*60/p*60/q2, maxPago=900*m/p;                         // Art. 42.10 y 42.11
+    const bruto=pares*unitario, premio=Math.min(bruto,maxPago);
+    return {ok:true,premio,jugado:m,pos:pares?SA.concat(SB):[],topeado:bruto>maxPago,pares,
+      detalle:pares?`Primer número en postura ${SA.join(', ')} y segundo en postura ${SB.join(', ')}`:'No hubo acierto en ambos números'};
+  }
+  if(p<1||p>14) return bad('La postura va de 1 a 14.');
+  const n=String(L.n||'');
+  if(L.tipo==='inv'){
+    if(n.length!==3) return bad('Escribí las 3 cifras de la invertida.');
+    if(new Set(n.split('')).size!==3) return bad('Las 3 cifras de la invertida deben ser distintas.');
+    const comb=new Set(PERMS.map(q=>q.map(i=>n[i]).join('')));
+    const hits=[];
+    for(let i=1;i<=p;i++) if(comb.has(res[i-1])) hits.push(i);
+    const unit=m/p, bruto=hits.length*unit*450, maxPago=800*unit;         // Art. 41.6 a 41.8
+    return {ok:true,premio:Math.min(bruto,maxPago),jugado:m*6,pos:hits,topeado:bruto>maxPago,
+      detalle:hits.length?hits.map(i=>`postura ${i} (${res[i-1]})`).join(', '):'No salió ninguna combinación'};
+  }
+  if(n.length<1||n.length>3) return bad('Escribí el número jugado (1 a 3 cifras).');
+  const k=n.length,hits=[];
+  for(let i=1;i<=p;i++) if(res[i-1].slice(-k)===n) hits.push(i);
+  const unit=m/p, bruto=hits.length*unit*MULT[k], maxPago=600*unit;       // Art. 9, 11 y 12
+  return {ok:true,premio:Math.min(bruto,maxPago),jugado:m,pos:hits,topeado:bruto>maxPago,
+    detalle:hits.length?hits.map(i=>`postura ${i} (${res[i-1]})`).join(', '):'No salió'};
+}
+/*ENDENGINE*/
+
+/* ---------- Boleta con premio ---------- */
+const TIPOS=[['dir','Directa'],['inv','Invertida'],['red','Redoblona']];
+const TNAME={dir:'Directa',inv:'Invertida',red:'Redoblona'};
+const BKEY='crz_boleta';
+let BOL=null,FOTO=null;
+const nuevaLinea=()=>({tipo:'dir',n:'',p:1,m:0,n2:'',p2:7});
+const nuevaBoleta=()=>({fecha:iso2fmt(hoyStr()),sorteo:sugerido(SORTEOS),lines:[nuevaLinea()]});
+function loadBol(){
+  try{BOL=JSON.parse(localStorage.getItem(BKEY)||'null');}catch(e){BOL=null;}
+  if(!BOL||!Array.isArray(BOL.lines)||!BOL.lines.length||!BOL.fecha||!BOL.sorteo) BOL=nuevaBoleta();
+}
+function saveBol(){try{localStorage.setItem(BKEY,JSON.stringify(BOL));}catch(e){}}
+function bf(i,k,label,val,o={}){
+  const v=o.money?(val?fmt(val):''):(val===0||val==null?'':val);
+  return `<label class="fld"><span>${label}</span><div class="inp">${o.pre?`<i>${o.pre}</i>`:''}<input data-bi="${i}" data-k="${k}" type="text" inputmode="numeric" autocomplete="off"${o.ml?` maxlength="${o.ml}"`:''} value="${v}"></div></label>`;
+}
+function lineaHTML(L,i){
+  const t=L.tipo;
+  let h=`<div class="lcard"><div class="lhead"><b>Jugada ${i+1}</b>${BOL.lines.length>1?`<button class="icon-btn sm" data-act="del" data-i="${i}" aria-label="Quitar jugada ${i+1}">✕</button>`:''}</div>`;
+  h+=`<div class="chips">${TIPOS.map(([k,nm])=>`<button class="chip ${t===k?'on':''}" data-act="tipo" data-i="${i}" data-v="${k}">${nm}</button>`).join('')}</div>`;
+  if(t==='red'){
+    h+=`<div class="grid2">${bf(i,'n','Número (2 cifras)',L.n,{ml:2})}${bf(i,'p','Postura',L.p,{ml:2})}</div>`;
+    h+=`<div class="grid2">${bf(i,'n2','Redoblona (2 cifras)',L.n2,{ml:2})}${bf(i,'p2','Postura (7 a 14)',L.p2,{ml:2})}</div>`;
+  }else{
+    h+=`<div class="grid2">${bf(i,'n',t==='inv'?'Las 3 cifras (distintas)':'Número (1 a 3 cifras)',L.n,{ml:3})}${bf(i,'p','Postura (1 a 14)',L.p,{ml:2})}</div>`;
+  }
+  h+=bf(i,'m',t==='inv'?'Monto por combinación':'Monto',L.m,{money:1,pre:'Gs.'});
+  return h+`</div>`;
+}
+function renderBol(app){
+  app=app||$('#app');
+  let h=`<div id="bol"><section class="card"><h2>🧾 Boleta con premio</h2><p class="hint">Sacale una foto a la boleta, mirala y completá los datos. La app calcula el premio con el reglamento y los resultados que tengas cargados de esa fecha.</p>
+  <input type="file" id="foto" accept="image/*" hidden>
+  ${FOTO?`<img class="foto" id="fotoimg" src="${FOTO}" alt="Foto de la boleta"><p class="meta">Tocá la foto para agrandarla o achicarla. No sale de tu celular.</p><div class="grid2"><button class="btn ghost" data-act="pick">Cambiar foto</button><button class="btn ghost" data-act="rmfoto">Quitar foto</button></div>`:`<button class="btn ghost full" data-act="pick">📷 Foto de la boleta</button>`}
+  </section><section class="card"><h2>Datos de la boleta</h2>
+  <label class="fld"><span>Fecha de la boleta</span><div class="inp"><i>📅</i><input data-bf="fecha" type="text" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="dd/mm/aaaa" value="${BOL.fecha}"></div></label>
+  <div class="chips">${SORTEOS.map(s=>`<button class="chip ${s[0]===BOL.sorteo?'on':''}" data-act="sorteo" data-v="${s[0]}">${s[2]} ${s[1].replace('Sorteo ','')}</button>`).join('')}</div>
+  ${BOL.lines.map(lineaHTML).join('')}
+  <button class="btn ghost full" data-act="add">+ Agregar otra jugada</button></section>
+  <div id="bres"></div>
+  <button class="btn ghost full" data-act="new">Nueva boleta</button></div>`;
+  app.innerHTML=h;
+  const root=$('#bol',app);
+  root.addEventListener('input',e=>{
+    const t=e.target;
+    if(t.dataset.bf==='fecha'){maskFecha(t);BOL.fecha=t.value;}
+    else if(t.dataset.bi!==undefined){
+      const L=BOL.lines[+t.dataset.bi],k=t.dataset.k;
+      if(k==='m'){const v=num(t.value);t.value=v?fmt(v):'';L.m=v;}
+      else if(k==='n'||k==='n2'){t.value=t.value.replace(/\D/g,'');L[k]=t.value;}
+      else{const v=num(t.value);t.value=v?String(v):'';L[k]=v;}
+    }else return;
+    saveBol();updateBol();
+  });
+  root.addEventListener('click',e=>{
+    const b=e.target.closest('[data-act]');
+    if(e.target.id==='fotoimg'){e.target.classList.toggle('big');return;}
+    if(!b) return;
+    const a=b.dataset.act,i=+b.dataset.i;
+    if(a==='pick'){$('#foto',app).click();return;}
+    if(a==='rmfoto'){if(FOTO)URL.revokeObjectURL(FOTO);FOTO=null;renderBol(app);return;}
+    if(a==='sorteo') BOL.sorteo=b.dataset.v;
+    else if(a==='tipo'){const L=BOL.lines[i];L.tipo=b.dataset.v;if(L.tipo==='red'){L.n=String(L.n).slice(0,2);if(!(L.p2>=7))L.p2=7;}}
+    else if(a==='add') BOL.lines.push(nuevaLinea());
+    else if(a==='del') BOL.lines.splice(i,1);
+    else if(a==='new'){BOL=nuevaBoleta();if(FOTO)URL.revokeObjectURL(FOTO);FOTO=null;}
+    else if(a==='goRes'){const iso=fmt2iso(BOL.fecha);RDATE=iso||hoyStr();LD=BOL.sorteo;S.tab='res';save();render();return;}
+    else if(a==='wa'){const c=calcBol();if(c.listo)wa(bolText(c));return;}
+    else return;
+    saveBol();renderBol(app);
+  });
+  $('#foto',app).addEventListener('change',e=>{
+    const f=e.target.files&&e.target.files[0];if(!f) return;
+    if(FOTO)URL.revokeObjectURL(FOTO);
+    FOTO=URL.createObjectURL(f);renderBol(app);
+  });
+  updateBol();
+}
+function calcBol(){
+  const out={iso:fmt2iso(BOL.fecha),res:null,filas:[],total:0,jugado:0,listo:false,errores:[]};
+  if(!out.iso){out.err='Escribí la fecha de la boleta completa, por ejemplo 27/11/2026.';return out;}
+  const d=diasDesde(out.iso);
+  if(d<0){out.err='La fecha de la boleta es posterior a hoy.';return out;}
+  if(d>60) out.aviso=`Pasaron ${d} días del sorteo. Según el reglamento (Art. 40) los premios se abonan hasta 60 días después.`;
+  const res=(HIST[out.iso]||{})[BOL.sorteo];
+  if(!res||res.length<14){out.falta=true;return out;}
+  out.res=res;
+  BOL.lines.forEach((L,i)=>{
+    const r=evalLinea(L,res);
+    out.filas.push({L,r});
+    if(!r.ok) out.errores.push(`Jugada ${i+1}: ${r.msg}`);
+    else{out.total+=r.premio;out.jugado+=r.jugado;}
+  });
+  out.listo=out.errores.length===0;
+  return out;
+}
+function updateBol(){
+  const box=$('#bres');if(!box) return;
+  const c=calcBol(),sn=SORTEOS.find(s=>s[0]===BOL.sorteo)[1];
+  let h='';
+  if(c.err){box.innerHTML=`<div class="warn">${c.err}</div>`;return;}
+  if(c.aviso) h+=`<div class="warn">${c.aviso}</div>`;
+  if(c.falta){
+    box.innerHTML=h+`<div class="warn">No tenés cargados los resultados del ${BOL.fecha} para el ${sn}. Cargalos para calcular el premio.</div><button class="btn full" data-act="goRes" style="background:var(--accent);color:var(--accent-ink)">Cargar esos resultados</button>`;
+    return;
+  }
+  const hit=new Set();c.filas.forEach(f=>{if(f.r.ok)f.r.pos.forEach(x=>hit.add(x));});
+  h+=`<section class="card"><h2>${sn} · ${BOL.fecha}</h2><div class="balls">${c.res.map((x,i)=>`<button class="ball ${hit.has(i+1)?'hit':''}" data-n="${x}"><small>${p2(i+1)}</small><b>${x}</b></button>`).join('')}</div></section>`;
+  h+=`<section class="card"><h2>Jugadas</h2><div class="list">${c.filas.map(({L,r},i)=>{
+    const tit=`${TNAME[L.tipo]} ${L.tipo==='red'?`${L.n} (post. ${L.p}) y ${L.n2} (post. ${L.p2})`:`${L.n} · postura ${L.p}`}`;
+    if(!r.ok) return `<div class="li"><div><div class="nm">Jugada ${i+1}</div><div class="meta" style="margin:2px 0 0;color:var(--red);font-weight:700">${r.msg}</div></div></div>`;
+    const extra=[L.tipo==='inv'?`Total jugado ${gs(r.jugado)} (6 combinaciones)`:`Jugado ${gs(r.jugado)}`,r.topeado?'se paga el máximo del reglamento':'',(L.tipo==='red'&&r.pares>1)?'con repeticiones: la liquidación exacta la define el concesionario':''].filter(Boolean).join(' · ');
+    return `<div class="li"><div style="min-width:0"><div class="nm" style="min-width:0">${tit}</div><div class="meta" style="margin:2px 0 0">${r.detalle}. ${extra}</div></div><span class="am">${r.premio>0?gs(r.premio):'Sin premio'}</span></div>`;
+  }).join('')}</div></section>`;
+  if(c.listo){
+    h+=`<section class="hero"><div class="lbl">${c.total>0?'Premio total a pagar':'Esta boleta no tiene premio'}</div><div class="big">${gs(c.total)}</div><div class="row"><span>Total jugado</span><b>${gs(c.jugado)}</b></div></section><button class="btn full" data-act="wa">Compartir por WhatsApp</button>`;
+  }else{
+    h+=`<div class="warn">${c.errores.join('<br>')}</div>`;
+  }
+  box.innerHTML=h;
+  $$('[data-n]',box).forEach(b=>b.onclick=()=>toast(dm(b.dataset.n)));
+}
+function bolText(c){
+  const sn=SORTEOS.find(s=>s[0]===BOL.sorteo)[1];
+  let t=`🧾 *Boleta · Cálculos de premios by CRz*\n📅 ${BOL.fecha} · ${sn}\n━━━━━━━━━━\n`;
+  c.filas.forEach(({L,r})=>{
+    t+=`• ${TNAME[L.tipo]} ${L.tipo==='red'?`${L.n}-${L.n2} (post. ${L.p} y ${L.p2})`:`${L.n} (post. ${L.p})`} · ${gs(L.m)}${L.tipo==='inv'?' x comb.':''} → ${r.premio>0?`*${gs(r.premio)}*`:'sin premio'}\n`;
+  });
+  return t+`━━━━━━━━━━\n🏆 *PREMIO TOTAL: ${gs(c.total)}*`;
 }
 
 /* ---------- Sueños 00-99 ---------- */
@@ -584,7 +810,7 @@ function updSue(){
 function render(){
   $$('.tabbtn').forEach(b=>b.classList.toggle('on',b.dataset.tab===S.tab));
   const app=$('#app');
-  if(S.tab==='tabla') renderTabla(app); else if(S.tab==='mil') renderMil(app); else if(S.tab==='res') renderRes(app); else if(S.tab==='sue') renderSue(app); else renderCalc(app);
+  if(S.tab==='tabla') renderTabla(app); else if(S.tab==='mil') renderMil(app); else if(S.tab==='res') renderRes(app); else if(S.tab==='sue') renderSue(app); else if(S.tab==='bol') renderBol(app); else renderCalc(app);
   window.scrollTo(0,0);
 }
 $$('.tabbtn').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;save();render();});
@@ -610,8 +836,8 @@ window.addEventListener('appinstalled',()=>{$('#install').hidden=true;});
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
+loadHist();loadBol();
 render();
-loadRes();
 </script>
 </body>
 </html>
