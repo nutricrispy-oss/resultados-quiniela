@@ -878,6 +878,21 @@ async function leerFoto(url,onProg,parse,ok,esRes){
     }
     const f=votar(rs,esRes);
     f.lecturas=rs.length;
+    if(esRes&&(!f.sorteo||!f.fecha)){ // encabezado chico o con letras claras sobre fondo oscuro: franjas ampliadas, normal y en negativo
+      const W=img.naturalWidth,H=img.naturalHeight,bh=Math.round(H*0.1);
+      await wk.setParameters({tessedit_pageseg_mode:'7',preserve_interword_spaces:'1'});
+      outer:for(let y=0;y<H*0.45;y+=Math.round(H*0.05)){
+        for(const inv of [false,true]){
+          onProg('Leyendo el encabezado…',0);
+          const c=document.createElement('canvas');c.width=W*3;c.height=bh*3;const g=c.getContext('2d');g.drawImage(img,0,y,W,bh,0,0,c.width,c.height);
+          if(inv){const d=g.getImageData(0,0,c.width,c.height),q=d.data;for(let i=0;i<q.length;i+=4){q[i]=255-q[i];q[i+1]=255-q[i+1];q[i+2]=255-q[i+2];}g.putImageData(d,0,0);}
+          const r=parse((await wk.recognize(c)).data.text);
+          if(!f.sorteo&&r.sorteo) f.sorteo=r.sorteo;
+          if(!f.fecha&&r.fecha) f.fecha=r.fecha;
+          if(f.sorteo&&f.fecha) break outer;
+        }
+      }
+    }
     return f;
   }finally{try{await wk.terminate();}catch(e){}}
 }
